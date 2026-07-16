@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from core.analysis_transparency import classify_analysis
 from core.constants import DEFAULT_SIMULATIONS, MIN_SIMULATIONS
@@ -69,6 +69,16 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_football_can_start_with_sportmonks_only(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {"API_SPORTS_KEY": "", "SPORTMONKS_API_TOKEN": "configured-token"},
+        ):
+            api = FootballAPI()
+
+        self.assertFalse(api.api_key)
+        self.assertTrue(api.supplemental_api.available)
+
     def test_confidence_uses_history_consistency_agreement_and_quality(self) -> None:
         markets = [{
             "market_type": "home_win", "selection": "Local", "probability": 70.0,

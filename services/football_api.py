@@ -11,7 +11,8 @@ class FootballAPI(BaseSportsAPI):
     def __init__(self):
         super().__init__(
             base_url="https://v3.football.api-sports.io",
-            sport_name="football"
+            sport_name="football",
+            require_api_key=False,
         )
         self.supplemental_api = SportmonksFootballAPI()
 

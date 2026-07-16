@@ -108,6 +108,8 @@ st.markdown(
             justify-content: center;
             gap: 0.85rem;
             text-align: center;
+            opacity: 0;
+            animation: app-loading-reveal 0.18s ease 0.7s forwards;
         }
 
         .app-loading-mark {
@@ -137,8 +139,13 @@ st.markdown(
             to { transform: rotate(360deg); }
         }
 
+        @keyframes app-loading-reveal {
+            to { opacity: 1; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             .app-loading-mark { animation-duration: 1.8s; }
+            .app-loading-screen { animation-duration: 0.01s; }
         }
 
         .small-text {

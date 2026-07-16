@@ -13,18 +13,16 @@ load_dotenv()
 
 
 class BaseSportsAPI:
-    def __init__(self, base_url: str, sport_name: str):
-        self.api_key = os.getenv("API_SPORTS_KEY")
+    def __init__(self, base_url: str, sport_name: str, require_api_key: bool = True):
+        self.api_key = (os.getenv("API_SPORTS_KEY") or "").strip()
 
-        if not self.api_key:
-            raise ValueError("Falta API_SPORTS_KEY en el archivo .env")
+        if require_api_key and not self.api_key:
+            raise ValueError("Falta configurar API_SPORTS_KEY")
 
         self.base_url = base_url.rstrip("/")
         self.sport_name = sport_name.lower()
 
-        self.headers = {
-            "x-apisports-key": self.api_key
-        }
+        self.headers = {"x-apisports-key": self.api_key} if self.api_key else {}
 
         self.cache_dir = CACHE_DIR / self.sport_name
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -93,6 +91,9 @@ class BaseSportsAPI:
         max_hours: int = 24
     ) -> dict[str, Any]:
         params = params or {}
+
+        if not self.api_key:
+            raise ValueError("Proveedor API-Sports no configurado")
 
         cache_file = self._cache_path(
             endpoint=endpoint,
