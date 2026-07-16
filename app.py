@@ -100,6 +100,47 @@ st.markdown(
             background: transparent;
         }
 
+        .app-loading-screen {
+            min-height: 68vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.85rem;
+            text-align: center;
+        }
+
+        .app-loading-mark {
+            width: 62px;
+            height: 62px;
+            border-radius: 50%;
+            border: 4px solid rgba(30, 136, 229, 0.18);
+            border-top-color: var(--primary);
+            animation: app-loading-spin 0.85s linear infinite;
+            box-shadow: 0 0 32px rgba(30, 136, 229, 0.22);
+        }
+
+        .app-loading-title {
+            color: var(--text);
+            font-size: clamp(1.35rem, 3vw, 1.8rem);
+            font-weight: 780;
+            margin-top: 0.35rem;
+        }
+
+        .app-loading-copy {
+            color: var(--muted);
+            font-size: 0.95rem;
+            max-width: 420px;
+        }
+
+        @keyframes app-loading-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .app-loading-mark { animation-duration: 1.8s; }
+        }
+
         .small-text {
             color: var(--muted);
             text-align: center;
@@ -2321,21 +2362,39 @@ def run_analysis(
 
 logger.info("Aplicación iniciada")
 
-create_database()
-seed_sports()
-init_state()
-
-auth_manager = AuthManager()
-usage_tracker = UsageTracker()
-billing_manager = BillingManager()
-admin_service = AdminService()
-try:
-    auth_manager.ensure_admin_from_environment(
-        os.getenv("ADMIN_EMAIL"),
-        os.getenv("ADMIN_PASSWORD"),
+initial_loading = st.empty()
+with initial_loading.container():
+    st.markdown(
+        """
+        <div class="app-loading-screen" role="status" aria-live="polite">
+            <div class="app-loading-mark" aria-hidden="true"></div>
+            <div class="app-loading-title">Preparando tu experiencia</div>
+            <div class="app-loading-copy">
+                Estamos cargando los modelos y datos necesarios para comenzar.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-except ValueError as error:
-    logger.error("No se pudo inicializar el administrador configurado: %s", error)
+
+try:
+    create_database()
+    seed_sports()
+    init_state()
+
+    auth_manager = AuthManager()
+    usage_tracker = UsageTracker()
+    billing_manager = BillingManager()
+    admin_service = AdminService()
+    try:
+        auth_manager.ensure_admin_from_environment(
+            os.getenv("ADMIN_EMAIL"),
+            os.getenv("ADMIN_PASSWORD"),
+        )
+    except ValueError as error:
+        logger.error("No se pudo inicializar el administrador configurado: %s", error)
+finally:
+    initial_loading.empty()
 
 current_user = st.session_state.get("current_user")
 if current_user:
