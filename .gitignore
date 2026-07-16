@@ -3,7 +3,6 @@ __pycache__/
 *.pyc
 .env
 logs/
-data/database/*.db
-data/cache/
-data/raw/
+data/
+machine_learning/models_store/versions/
 .streamlit/

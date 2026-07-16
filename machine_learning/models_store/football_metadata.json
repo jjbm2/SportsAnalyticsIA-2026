@@ -1,0 +1,35 @@
+{
+  "feature_columns": [
+    "home_avg_scored",
+    "home_avg_conceded",
+    "away_avg_scored",
+    "away_avg_conceded",
+    "home_avg_scored_last5",
+    "home_avg_conceded_last5",
+    "away_avg_scored_last5",
+    "away_avg_conceded_last5",
+    "home_win_rate_last5",
+    "home_draw_rate_last5",
+    "away_win_rate_last5",
+    "away_draw_rate_last5",
+    "home_clean_sheet_rate_last5",
+    "away_clean_sheet_rate_last5",
+    "home_failed_to_score_rate_last5",
+    "away_failed_to_score_rate_last5",
+    "diff_avg_scored",
+    "diff_avg_conceded",
+    "diff_win_rate_last5",
+    "diff_clean_sheet_rate_last5",
+    "diff_failed_to_score_rate_last5",
+    "home_advantage"
+  ],
+  "dataset_rows": 350,
+  "trained_at": "2026-07-14T05:01:59.036952+00:00",
+  "metrics": {
+    "result_accuracy": 0.4857142857142857,
+    "over_accuracy": 0.5142857142857142,
+    "btts_accuracy": 0.5,
+    "over_auc": 0.46898263027295284,
+    "btts_auc": 0.47712418300653603
+  }
+}

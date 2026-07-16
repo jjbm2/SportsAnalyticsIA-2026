@@ -1,0 +1,60 @@
+{
+  "model_version": "20260714_202432",
+  "status": "active",
+  "league_id": 1,
+  "train_seasons": [
+    2023
+  ],
+  "test_season": 2024,
+  "train_rows": 2802,
+  "test_rows": 2798,
+  "feature_columns": [
+    "home_avg_scored",
+    "home_avg_allowed",
+    "home_win_rate",
+    "home_avg_total",
+    "home_score_std",
+    "home_avg_scored_last5",
+    "home_avg_allowed_last5",
+    "home_win_rate_last5",
+    "away_avg_scored",
+    "away_avg_allowed",
+    "away_win_rate",
+    "away_avg_total",
+    "away_score_std",
+    "away_avg_scored_last5",
+    "away_avg_allowed_last5",
+    "away_win_rate_last5",
+    "diff_avg_scored",
+    "diff_avg_allowed",
+    "diff_win_rate",
+    "diff_avg_total",
+    "diff_win_rate_last5",
+    "home_advantage"
+  ],
+  "metrics": {
+    "home_win": {
+      "accuracy": 0.5335954253037885,
+      "baseline_accuracy": 0.5192994996426019,
+      "accuracy_lift": 0.014295925661186537,
+      "brier_score": 0.24734956564178376,
+      "roc_auc": 0.5529536377754524
+    },
+    "over_85": {
+      "accuracy": 0.5178699070764832,
+      "baseline_accuracy": 0.5089349535382416,
+      "accuracy_lift": 0.008934953538241586,
+      "brier_score": 0.25073926896577925,
+      "roc_auc": 0.5251147923719804
+    },
+    "home_over_35": {
+      "accuracy": 0.5704074338813439,
+      "baseline_accuracy": 0.5614724803431023,
+      "accuracy_lift": 0.008934953538241586,
+      "brier_score": 0.2458889061098153,
+      "roc_auc": 0.5255348961956654
+    }
+  },
+  "trained_at": "2026-07-14T20:24:32.021306+00:00",
+  "validation_note": "Validación temporal 2023→2024. MLB 2025 no está disponible en el plan actual."
+}

@@ -1,0 +1,60 @@
+{
+  "model_version": "20260714_223312",
+  "status": "active",
+  "league_id": 1,
+  "train_seasons": [
+    2022,
+    2023
+  ],
+  "test_season": 2024,
+  "train_rows": 505,
+  "test_rows": 254,
+  "feature_columns": [
+    "home_avg_scored",
+    "home_avg_allowed",
+    "home_win_rate",
+    "home_avg_total",
+    "home_score_std",
+    "home_avg_scored_last5",
+    "home_avg_allowed_last5",
+    "home_win_rate_last5",
+    "away_avg_scored",
+    "away_avg_allowed",
+    "away_win_rate",
+    "away_avg_total",
+    "away_score_std",
+    "away_avg_scored_last5",
+    "away_avg_allowed_last5",
+    "away_win_rate_last5",
+    "diff_avg_scored",
+    "diff_avg_allowed",
+    "diff_win_rate",
+    "diff_avg_total",
+    "diff_win_rate_last5",
+    "home_advantage"
+  ],
+  "metrics": {
+    "home_win": {
+      "accuracy": 0.6377952755905512,
+      "baseline_accuracy": 0.5511811023622047,
+      "accuracy_lift": 0.08661417322834641,
+      "brier_score": 0.2272358445627383,
+      "roc_auc": 0.6703634085213034
+    },
+    "over_415": {
+      "accuracy": 0.5826771653543307,
+      "baseline_accuracy": 0.6496062992125984,
+      "accuracy_lift": -0.06692913385826771,
+      "brier_score": 0.23905636209866551,
+      "roc_auc": 0.604902962206333
+    },
+    "home_over_205": {
+      "accuracy": 0.65748031496063,
+      "baseline_accuracy": 0.6181102362204725,
+      "accuracy_lift": 0.03937007874015752,
+      "brier_score": 0.22151344967431114,
+      "roc_auc": 0.6785081095278744
+    }
+  },
+  "trained_at": "2026-07-14T22:33:12.595935+00:00"
+}
