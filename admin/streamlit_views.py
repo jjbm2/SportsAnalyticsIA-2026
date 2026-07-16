@@ -6,6 +6,7 @@ import streamlit as st
 from admin.admin_service import AdminService
 from billing.billing_manager import BillingManager
 from core.plans import PLANS
+from core.system_health import deployment_health
 
 
 def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager, sports: list[str]) -> None:
@@ -21,11 +22,41 @@ def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager
 
     with dashboard_tab:
         metrics = admin.dashboard(user["id"])
-        cols = st.columns(4)
-        cols[0].metric("Usuarios", metrics["total_users"])
-        cols[1].metric("Ingresos aprobados", f'${metrics["approved_revenue_mxn"]:,.0f} MXN')
-        cols[2].metric("Predicciones", metrics["predictions"])
-        cols[3].metric("Pagos pendientes", metrics["pending_payments"])
+        with st.container(horizontal=True):
+            st.metric("Usuarios", metrics["total_users"], border=True)
+            st.metric(
+                "Ingresos aprobados",
+                f'${metrics["approved_revenue_mxn"]:,.0f} MXN',
+                border=True,
+            )
+            st.metric("Predicciones", metrics["predictions"], border=True)
+            st.metric("Pagos pendientes", metrics["pending_payments"], border=True)
+
+        st.subheader("Estado del sistema")
+        health = deployment_health()
+        with st.container(border=True):
+            st.badge(
+                health["database_backend"],
+                icon=":material/database:",
+                color="green" if health["database_ok"] else "red",
+            )
+            st.caption("La información mostrada no incluye claves ni credenciales.")
+            with st.container(horizontal=True):
+                st.metric(
+                    "API-Sports",
+                    "Configurada" if health["api_sports"] else "Pendiente",
+                    border=True,
+                )
+                st.metric(
+                    "Sportmonks",
+                    "Configurada" if health["sportmonks"] else "Pendiente",
+                    border=True,
+                )
+                st.metric(
+                    "BallDontLie",
+                    "Configurada" if health["balldontlie"] else "Pendiente",
+                    border=True,
+                )
 
     with users_tab:
         st.caption(f"{len(users)} usuarios registrados en la base de datos actual.")

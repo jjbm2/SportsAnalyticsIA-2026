@@ -134,6 +134,15 @@ class SaaSFlowTests(unittest.TestCase):
         self.assertEqual(status["plan"], "full")
         self.assertIsNone(status["limit"])
 
+    def test_environment_admin_promotes_existing_user(self) -> None:
+        self.auth.ensure_admin_from_environment("user@example.com", "IgnoredPass123")
+        promoted = self.auth.authenticate("user@example.com", "UserPass123")
+
+        self.assertTrue(promoted["is_admin"])
+        status = self.usage.can_user_predict(promoted["id"], "Fútbol")
+        self.assertEqual(status["plan"], "full")
+        self.assertIsNone(status["limit"])
+
     def test_admin_can_grant_loyalty_usage(self) -> None:
         self.usage.record_prediction(self.user["id"], "Fútbol")
         self.assertFalse(self.usage.can_user_predict(self.user["id"], "Fútbol")["allowed"])
