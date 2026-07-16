@@ -1580,6 +1580,7 @@ def home_screen() -> None:
             prefetch_all_sports(
                 selected_date=selected_date,
                 force_refresh=force_refresh,
+                sports=[sport],
             )
 
         st.session_state["screen"] = "sport"
