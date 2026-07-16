@@ -10,6 +10,7 @@ from core.constants import DEFAULT_SIMULATIONS, MIN_SIMULATIONS
 from core.game_status import extract_final_score, is_finished_status
 from core.paths import DATABASE_PATH
 from database.model_metrics_repository import ModelMetricsRepository
+from database.database import _database_url
 from engines.formula1_prediction_engine import Formula1PredictionEngine
 from engines.football_prediction_engine import FootballPredictionEngine
 from engines.specialty_prediction_engines import (
@@ -69,6 +70,16 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_neon_database_url_uses_psycopg_driver(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {"DATABASE_URL": "postgresql://user:password@example.neon.tech/app?sslmode=require"},
+        ):
+            url = _database_url()
+
+        self.assertTrue(url.startswith("postgresql+psycopg://"))
+        self.assertIn("sslmode=require", url)
+
     def test_football_can_start_with_sportmonks_only(self) -> None:
         with patch.dict(
             "os.environ",
