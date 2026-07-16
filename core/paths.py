@@ -1,9 +1,12 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ASSETS_DIR = BASE_DIR / "assets"
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(
+    os.getenv("SPORTSANALYTICS_DATA_DIR", str(BASE_DIR / "data"))
+).expanduser()
 DATABASE_DIR = DATA_DIR / "database"
 CACHE_DIR = DATA_DIR / "cache"
 RAW_DIR = DATA_DIR / "raw"

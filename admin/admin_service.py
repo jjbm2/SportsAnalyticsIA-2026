@@ -35,7 +35,16 @@ class AdminService:
         session = self.session_factory()
         try:
             self._require_admin(session, admin_user_id)
-            return [{"id": user.id, "email": user.email, "plan": user.plan, "is_admin": user.is_admin} for user in session.query(User).order_by(User.created_at.desc()).all()]
+            return [
+                {
+                    "id": user.id,
+                    "email": user.email,
+                    "plan": user.plan,
+                    "is_admin": user.is_admin,
+                    "created_at": user.created_at,
+                }
+                for user in session.query(User).order_by(User.created_at.desc()).all()
+            ]
         finally:
             session.close()
 

@@ -28,6 +28,7 @@ def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager
         cols[3].metric("Pagos pendientes", metrics["pending_payments"])
 
     with users_tab:
+        st.caption(f"{len(users)} usuarios registrados en la base de datos actual.")
         st.dataframe(pd.DataFrame(users), hide_index=True, width="stretch")
         selected_label = st.selectbox("Usuario", list(user_options), key="admin_plan_user")
         selected_plan = st.selectbox("Nuevo plan", list(PLANS), key="admin_plan")
