@@ -11,7 +11,7 @@ from core.constants import DEFAULT_SIMULATIONS, MIN_SIMULATIONS
 from core.game_status import extract_final_score, is_finished_status
 from core.paths import DATABASE_PATH
 from database.model_metrics_repository import ModelMetricsRepository
-from database.database import _database_url
+from database.database import _database_url, _engine_options
 from engines.formula1_prediction_engine import Formula1PredictionEngine
 from engines.football_prediction_engine import FootballPredictionEngine
 from engines.specialty_prediction_engines import (
@@ -74,6 +74,20 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_postgres_pool_is_bounded_for_small_web_instance(self) -> None:
+        options = _engine_options("postgresql+psycopg://example")
+
+        self.assertEqual(options["pool_size"], 2)
+        self.assertEqual(options["max_overflow"], 1)
+        self.assertEqual(options["pool_timeout"], 15)
+        self.assertEqual(options["connect_args"]["connect_timeout"], 10)
+
+    def test_sqlite_keeps_local_timeout_without_postgres_pool_options(self) -> None:
+        options = _engine_options("sqlite:///local.db")
+
+        self.assertEqual(options["connect_args"]["timeout"], 30)
+        self.assertNotIn("pool_size", options)
+
     def test_provider_application_error_is_not_cached_as_games(self) -> None:
         cache_dir = Path("data/test_provider_error_cache")
         cache_file = cache_dir / "games_unique.json"

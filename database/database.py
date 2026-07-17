@@ -20,15 +20,29 @@ def _database_url() -> str:
 
 
 DATABASE_URL = _database_url()
-engine_options = {
-    "echo": False,
-    "future": True,
-    "pool_pre_ping": True,
-}
-if DATABASE_URL.startswith("sqlite"):
-    engine_options["connect_args"] = {"timeout": 30}
-else:
-    engine_options["pool_recycle"] = 300
+
+
+def _engine_options(database_url: str) -> dict:
+    options = {
+        "echo": False,
+        "future": True,
+        "pool_pre_ping": True,
+    }
+    if database_url.startswith("sqlite"):
+        options["connect_args"] = {"timeout": 30}
+    else:
+        options.update({
+            "pool_size": 2,
+            "max_overflow": 1,
+            "pool_timeout": 15,
+            "pool_recycle": 300,
+            "pool_use_lifo": True,
+            "connect_args": {"connect_timeout": 10},
+        })
+    return options
+
+
+engine_options = _engine_options(DATABASE_URL)
 
 engine = create_engine(DATABASE_URL, **engine_options)
 

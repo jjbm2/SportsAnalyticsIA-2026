@@ -2405,6 +2405,7 @@ with initial_loading.container():
         unsafe_allow_html=True,
     )
 
+initialization_failed = False
 try:
     create_database()
     seed_sports()
@@ -2421,8 +2422,28 @@ try:
         )
     except ValueError as error:
         logger.error("No se pudo inicializar el administrador configurado: %s", error)
+except Exception as error:
+    initialization_failed = True
+    logger.exception("No se pudo inicializar la aplicación: %s", error)
 finally:
     initial_loading.empty()
+
+if initialization_failed:
+    with st.container(border=True, horizontal_alignment="center"):
+        st.title("Volvemos en un momento", text_alignment="center")
+        st.write(
+            "Estamos restableciendo la conexión con el servicio. "
+            "Tus datos permanecen protegidos.",
+            text_alignment="center",
+        )
+        if st.button(
+            "Intentar nuevamente",
+            icon=":material/refresh:",
+            type="primary",
+            key="retry_initialization",
+        ):
+            st.rerun()
+    st.stop()
 
 current_user = st.session_state.get("current_user")
 if current_user:
