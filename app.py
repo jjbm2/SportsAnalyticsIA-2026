@@ -502,6 +502,7 @@ def init_state() -> None:
         "prefetched_games": {},
         "prefetched_sources": {},
         "prefetched_errors": {},
+        "prefetched_attempt_times": {},
         "prefetched_date": None,
         "last_cache_cleanup": None,
         "football_match_quality": {},
@@ -1284,17 +1285,27 @@ def prefetch_all_sports(
     requested_sports = sports or SPORT_NAMES
     same_date = st.session_state.get("prefetched_date") == date_string
     existing_games = st.session_state.get("prefetched_games", {}) if same_date else {}
+    existing_errors = st.session_state.get("prefetched_errors", {}) if same_date else {}
+    attempt_times = st.session_state.get("prefetched_attempt_times", {}) if same_date else {}
+    now_timestamp = datetime.now().timestamp()
+    retry_due = any(
+        sport in existing_errors
+        and now_timestamp - float(attempt_times.get(sport, 0.0)) >= 60.0
+        for sport in requested_sports
+    )
 
     if (
         same_date
         and all(sport in existing_games for sport in requested_sports)
         and not force_refresh
+        and not retry_due
     ):
         return
 
     all_games: dict[str, list[dict[str, Any]]] = dict(existing_games)
     sources: dict[str, str] = dict(st.session_state.get("prefetched_sources", {})) if same_date else {}
     errors: dict[str, str] = dict(st.session_state.get("prefetched_errors", {})) if same_date else {}
+    attempts: dict[str, float] = dict(attempt_times)
 
     progress_bar = st.progress(0)
     status_box = st.empty()
@@ -1303,6 +1314,7 @@ def prefetch_all_sports(
 
     for index, sport in enumerate(requested_sports, start=1):
         errors.pop(sport, None)
+        attempts[sport] = now_timestamp
         status_box.write(f"Cargando partidos de {sport} para {date_string}...")
 
         try:
@@ -1344,6 +1356,7 @@ def prefetch_all_sports(
     st.session_state["prefetched_games"] = all_games
     st.session_state["prefetched_sources"] = sources
     st.session_state["prefetched_errors"] = errors
+    st.session_state["prefetched_attempt_times"] = attempts
     st.session_state["prefetched_date"] = date_string
 
     progress_bar.empty()
@@ -1945,16 +1958,28 @@ def sport_screen() -> None:
         )
     if not usage_status["allowed"]:
         st.warning("Has alcanzado tu límite diario para este deporte")
-    if analysis_completed:
-        st.caption("Este evento ya fue analizado en esta sesión.")
-    if st.button(
-        "Analizar evento",
-        width="stretch",
-        type="primary",
-        icon=":material/analytics:",
-        disabled=not can_analyze or analysis_completed,
-        key="analyze_event",
-    ):
+    analyze_clicked = False
+    analyze_button = st.empty()
+    if selected_match is not None:
+        if analysis_completed:
+            st.caption("Este evento ya fue analizado en esta sesión.")
+        analyze_clicked = analyze_button.button(
+            "Analizar evento",
+            width="stretch",
+            type="primary",
+            icon=":material/analytics:",
+            disabled=not can_analyze or analysis_completed,
+            key="analyze_event",
+        )
+    if analyze_clicked:
+        analyze_button.button(
+            "Analizando evento…",
+            width="stretch",
+            type="primary",
+            icon="spinner",
+            disabled=True,
+            key="analyze_event_locked",
+        )
         st.session_state["analysis_in_progress"] = request_key
         reserved_usage = False
         try:
@@ -2184,6 +2209,7 @@ def run_analysis(
                     result["draw_probability"], result["away_win_probability"],
                     result["goal_lines"], result["btts_probability"],
                     result["home_score_probability"], result["away_score_probability"],
+                    result.get("team_goal_markets"),
                 )
                 fallback_features = {
                     "home_matches_played": home_profile.get("played", 0),

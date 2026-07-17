@@ -87,6 +87,12 @@ class FootballPredictionEngine:
         over_25 = int(((home_scores + away_scores) > 2).sum())
         under_35 = int(((home_scores + away_scores) < 4).sum())
         btts = int(((home_scores > 0) & (away_scores > 0)).sum())
+        team_goal_markets = {
+            "home_over_1_5": float((home_scores > 1).mean() * 100),
+            "away_over_1_5": float((away_scores > 1).mean() * 100),
+            "home_clean_sheet": float((away_scores == 0).mean() * 100),
+            "away_clean_sheet": float((home_scores == 0).mean() * 100),
+        }
         totals = home_scores + away_scores
         goal_lines = {}
         for line in (1.5, 2.5, 3.5, 4.5):
@@ -109,6 +115,7 @@ class FootballPredictionEngine:
             "btts_probability": (btts / simulations) * 100,
             "home_score_probability": float((home_scores > 0).mean() * 100),
             "away_score_probability": float((away_scores > 0).mean() * 100),
+            "team_goal_markets": team_goal_markets,
             "goal_lines": goal_lines,
             "recommended_total": recommended_total,
             "top_scores": top_scores,
@@ -137,6 +144,7 @@ class FootballPredictionEngine:
         cls, home_name: str, away_name: str, home_win: float, draw: float,
         away_win: float, goal_lines: dict[str, dict[str, float]], btts: float,
         home_scores: float, away_scores: float,
+        team_goal_markets: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
         raw = [
             ("Resultado", "home_win", f"{home_name} gana", home_win),
@@ -158,6 +166,13 @@ class FootballPredictionEngine:
             ("Ambos anotan", "btts_no", "Ambos anotan: No", 100.0 - btts),
             ("Goles por equipo", "home_over_0_5_goals", f"{home_name} marca", home_scores),
             ("Goles por equipo", "away_over_0_5_goals", f"{away_name} marca", away_scores),
+        ])
+        team_goal_markets = team_goal_markets or {}
+        raw.extend([
+            ("Goles por equipo", "home_over_1_5_goals", f"{home_name} marca 2 o más", team_goal_markets.get("home_over_1_5", 0.0)),
+            ("Goles por equipo", "away_over_1_5_goals", f"{away_name} marca 2 o más", team_goal_markets.get("away_over_1_5", 0.0)),
+            ("Portería en cero", "home_clean_sheet", f"{home_name} deja su portería en cero", team_goal_markets.get("home_clean_sheet", 0.0)),
+            ("Portería en cero", "away_clean_sheet", f"{away_name} deja su portería en cero", team_goal_markets.get("away_clean_sheet", 0.0)),
         ])
         return [cls._market(category, market_type, selection, probability) for category, market_type, selection, probability in raw]
 

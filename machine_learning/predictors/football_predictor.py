@@ -11,7 +11,7 @@ import pandas as pd
 from engines.football_prediction_engine import FootballPredictionEngine
 from machine_learning.features.football_features import FootballFeatures
 from machine_learning.calibration import FootballProbabilityCalibrator
-from machine_learning.model_quality import metric_is_qualified
+from machine_learning.model_quality import metric_is_qualified, validated_ml_weight
 from core.prediction_confidence import enrich_football_markets
 from core.match_quality import calculate_match_quality
 from core.game_style import apply_game_style_to_markets, classify_game_style
@@ -128,21 +128,29 @@ class FootballPredictor:
             simulations=simulations,
         )
 
+        blend_weights = {
+            market: validated_ml_weight(self.metadata, market) if qualified else 0.0
+            for market, qualified in quality_gate.items()
+        }
+
         if quality_gate["result"]:
-            final_home_win = (ml_probabilities["home_win"] + poisson_result["home_win_probability"]) / 2
-            final_draw = (ml_probabilities["draw"] + poisson_result["draw_probability"]) / 2
-            final_away_win = (ml_probabilities["away_win"] + poisson_result["away_win_probability"]) / 2
+            result_weight = blend_weights["result"]
+            final_home_win = ml_probabilities["home_win"] * result_weight + poisson_result["home_win_probability"] * (1.0 - result_weight)
+            final_draw = ml_probabilities["draw"] * result_weight + poisson_result["draw_probability"] * (1.0 - result_weight)
+            final_away_win = ml_probabilities["away_win"] * result_weight + poisson_result["away_win_probability"] * (1.0 - result_weight)
         else:
             final_home_win = poisson_result["home_win_probability"]
             final_draw = poisson_result["draw_probability"]
             final_away_win = poisson_result["away_win_probability"]
         final_over25 = (
-            (ml_probabilities["over25"] + poisson_result["over_25_probability"]) / 2
+            ml_probabilities["over25"] * blend_weights["over_2_5"]
+            + poisson_result["over_25_probability"] * (1.0 - blend_weights["over_2_5"])
             if quality_gate["over_2_5"]
             else poisson_result["over_25_probability"]
         )
         final_btts = (
-            (ml_probabilities["btts"] + poisson_result["btts_probability"]) / 2
+            ml_probabilities["btts"] * blend_weights["btts"]
+            + poisson_result["btts_probability"] * (1.0 - blend_weights["btts"])
             if quality_gate["btts"]
             else poisson_result["btts_probability"]
         )
@@ -160,6 +168,7 @@ class FootballPredictor:
             home_team_name, away_team_name, final_home_win, final_draw, final_away_win,
             goal_lines, final_btts, poisson_result["home_score_probability"],
             poisson_result["away_score_probability"],
+            poisson_result.get("team_goal_markets"),
         )
         feature_values = features_df.iloc[0].to_dict()
         enrich_football_markets(
@@ -185,10 +194,15 @@ class FootballPredictor:
             "Riesgo estimado": [item["risk"] for item in markets_to_save],
         })
 
+        active_ml_markets = [market for market, qualified in quality_gate.items() if qualified]
+        model_name = (
+            "Football ML validado + Poisson + Monte Carlo"
+            if active_ml_markets else "Poisson + Monte Carlo"
+        )
         return {
             **match_quality,
             **game_style,
-            "model_name": "Football ML + Poisson + Monte Carlo",
+            "model_name": model_name,
             "summary_cards": [
                 {"label": "Resultado más probable", "value": f"{likely_result} · {likely_result_probability:.1f}%"},
                 {"label": "Total sugerido", "value": f'{recommended_total["label"]} · {recommended_total["probability"]:.1f}%'},
@@ -197,7 +211,8 @@ class FootballPredictor:
                 "xG local estimado": f"{home_lambda:.2f}",
                 "xG visitante estimado": f"{away_lambda:.2f}",
                 "Simulaciones": f"{simulations:,}",
-                "Modelo": "ML + Poisson",
+                "Modelo": "ML validado + Poisson" if active_ml_markets else "Poisson",
+                "Señales ML aprobadas": str(len(active_ml_markets)),
             },
             "markets": markets_df.to_dict(orient="records"),
             "markets_to_save": markets_to_save,
@@ -213,6 +228,7 @@ class FootballPredictor:
                 "recommended_result": {"selection": likely_result, "probability": likely_result_probability},
                 "quality_gate": quality_gate,
                 "ml_probabilities": ml_probabilities,
+                "ml_blend_weights": blend_weights,
                 "match_quality": match_quality,
                 "game_style": game_style,
                 "probability_calibration": {

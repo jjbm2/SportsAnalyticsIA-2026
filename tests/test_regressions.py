@@ -578,11 +578,19 @@ class RegressionTests(unittest.TestCase):
         }
         markets = FootballPredictionEngine.build_market_options(
             "Local", "Visitante", 40, 30, 30, lines, 55, 70, 65,
+            {
+                "home_over_1_5": 58,
+                "away_over_1_5": 42,
+                "home_clean_sheet": 35,
+                "away_clean_sheet": 30,
+            },
         )
         market_types = {item["market_type"] for item in markets}
-        self.assertEqual(len(markets), 18)
+        self.assertEqual(len(markets), 22)
         self.assertIn("double_chance_home_draw", market_types)
         self.assertIn("away_over_0_5_goals", market_types)
+        self.assertIn("home_over_1_5_goals", market_types)
+        self.assertIn("away_clean_sheet", market_types)
 
     def test_football_advanced_features_use_only_supplied_history(self) -> None:
         from machine_learning.features.football_features import FootballFeatures
