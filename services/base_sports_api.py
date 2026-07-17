@@ -5,12 +5,23 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from threading import Lock
 from dotenv import load_dotenv
 
 from core.paths import CACHE_DIR
 from services.http_client import build_retry_session
 
 load_dotenv()
+
+
+_CACHE_LOCKS: dict[str, Lock] = {}
+_CACHE_LOCKS_GUARD = Lock()
+
+
+def _cache_lock(cache_file: Path) -> Lock:
+    key = str(cache_file.resolve())
+    with _CACHE_LOCKS_GUARD:
+        return _CACHE_LOCKS.setdefault(key, Lock())
 
 
 class ProviderResponseError(RuntimeError):
@@ -94,7 +105,7 @@ class BaseSportsAPI:
         params: dict[str, Any] | None = None,
         cache_key: str = "default",
         force_refresh: bool = False,
-        max_hours: int = 24
+        max_hours: float = 24
     ) -> dict[str, Any]:
         params = params or {}
 
@@ -115,35 +126,41 @@ class BaseSportsAPI:
             if cached_data is not None:
                 return cached_data
 
-        try:
-            response = self.http.get(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                headers=self.headers,
-                params=params,
-                timeout=30
+        with _cache_lock(cache_file):
+            if not force_refresh:
+                cached_data = self._read_cache(cache_file=cache_file, max_hours=max_hours)
+                if cached_data is not None:
+                    return cached_data
+
+            try:
+                response = self.http.get(
+                    f"{self.base_url}/{endpoint.lstrip('/')}",
+                    headers=self.headers,
+                    params=params,
+                    timeout=30
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                stale_data = self._read_cache(cache_file=cache_file, max_hours=None)
+                if stale_data is not None:
+                    stale_data["_source"] = "stale_cache"
+                    return stale_data
+                raise
+
+            data = response.json()
+            if data.get("errors"):
+                stale_data = self._read_cache(cache_file=cache_file, max_hours=None)
+                if stale_data is not None:
+                    stale_data["_source"] = "stale_cache"
+                    return stale_data
+                raise ProviderResponseError(
+                    f"{self.sport_name} provider rejected the request"
+                )
+            data["_source"] = "api"
+
+            self._save_cache(
+                cache_file=cache_file,
+                data=data
             )
-            response.raise_for_status()
-        except requests.RequestException:
-            stale_data = self._read_cache(cache_file=cache_file, max_hours=None)
-            if stale_data is not None:
-                stale_data["_source"] = "stale_cache"
-                return stale_data
-            raise
 
-        data = response.json()
-        if data.get("errors"):
-            stale_data = self._read_cache(cache_file=cache_file, max_hours=None)
-            if stale_data is not None:
-                stale_data["_source"] = "stale_cache"
-                return stale_data
-            raise ProviderResponseError(
-                f"{self.sport_name} provider rejected the request"
-            )
-        data["_source"] = "api"
-
-        self._save_cache(
-            cache_file=cache_file,
-            data=data
-        )
-
-        return data
+            return data

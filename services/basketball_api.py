@@ -1,5 +1,6 @@
 from services.base_sports_api import BaseSportsAPI
 from core.event_time import sports_timezone
+from core.event_cache_policy import event_cache_hours
 
 
 class BasketballAPI(BaseSportsAPI):
@@ -44,5 +45,5 @@ class BasketballAPI(BaseSportsAPI):
             params=params,
             cache_key=cache_key,
             force_refresh=force_refresh,
-            max_hours=6
+            max_hours=event_cache_hours(date)
         )

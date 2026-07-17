@@ -3,12 +3,14 @@ from __future__ import annotations
 import ast
 import sqlite3
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from core.analysis_transparency import classify_analysis
 from core.constants import DEFAULT_SIMULATIONS, MIN_SIMULATIONS
 from core.game_status import extract_final_score, is_finished_status
+from core.event_cache_policy import event_cache_hours
 from core.paths import DATABASE_PATH
 from database.model_metrics_repository import ModelMetricsRepository
 from database.database import _database_url, _engine_options
@@ -74,6 +76,11 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_event_cache_policy_keeps_today_fresh_and_future_weekly(self) -> None:
+        today = date(2026, 7, 16)
+        self.assertEqual(event_cache_hours(today, today=today), 0.25)
+        self.assertEqual(event_cache_hours(today + timedelta(days=1), today=today), 168)
+        self.assertEqual(event_cache_hours(today - timedelta(days=1), today=today), 336)
     def test_postgres_pool_is_bounded_for_small_web_instance(self) -> None:
         options = _engine_options("postgresql+psycopg://example")
 

@@ -6,6 +6,7 @@ from collections.abc import MutableMapping
 import streamlit as st
 
 from auth.auth_manager import AuthManager
+from auth.session_security import clear_authenticated_session, establish_authenticated_session
 
 
 MAX_LOGIN_ATTEMPTS = 5
@@ -68,7 +69,8 @@ def render_auth_screen(auth: AuthManager) -> None:
                 st.error("Las contraseñas no coinciden")
                 return
             try:
-                st.session_state["current_user"] = auth.register(email, password)
+                user = auth.register(email, password)
+                establish_authenticated_session(st.session_state, user)
                 st.session_state["screen"] = (
                     "account" if st.session_state.get("checkout_plan") else "home"
                 )
@@ -100,7 +102,7 @@ def render_auth_screen(auth: AuthManager) -> None:
                 st.error("Correo o contraseña incorrectos")
             return
         clear_login_failures(st.session_state)
-        st.session_state["current_user"] = user
+        establish_authenticated_session(st.session_state, user)
         st.session_state["screen"] = "home"
         st.rerun()
 
@@ -121,7 +123,5 @@ def render_account_navigation(user: dict) -> None:
             st.session_state["screen"] = "admin"
             st.rerun()
         if st.button("Cerrar sesión", icon=":material/logout:", width="stretch", key="saas_logout"):
-            st.session_state["current_user"] = None
-            st.session_state["screen"] = "home"
-            st.session_state["public_screen"] = "landing"
+            clear_authenticated_session(st.session_state)
             st.rerun()

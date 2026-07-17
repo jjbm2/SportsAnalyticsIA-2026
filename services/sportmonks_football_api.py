@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from core.game_status import is_finished_status
 from core.event_time import sports_timezone
 from core.paths import CACHE_DIR
+from core.event_cache_policy import event_cache_hours
 from services.http_client import build_retry_session
 
 
@@ -39,7 +40,7 @@ class SportmonksFootballAPI:
             params={"include": "league;participants;state;scores", "timezone": str(sports_timezone())},
             cache_key=f"fixtures_{fixture_date}_{str(sports_timezone()).replace('/', '_')}",
             force_refresh=force_refresh,
-            max_hours=6,
+            max_hours=event_cache_hours(fixture_date),
         )
         return [self._convert_fixture(item) for item in data if self._has_participants(item)]
 

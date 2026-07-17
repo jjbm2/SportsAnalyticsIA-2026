@@ -4,6 +4,7 @@ from datetime import date
 from typing import Any
 
 from services.base_sports_api import BaseSportsAPI
+from core.event_cache_policy import event_cache_hours
 
 
 class MMAAPI(BaseSportsAPI):
@@ -36,7 +37,7 @@ class MMAAPI(BaseSportsAPI):
             {"date": date},
             cache_key=date,
             force_refresh=force_refresh,
-            max_hours=6,
+            max_hours=event_cache_hours(date),
         )
         fights = [self._normalize(item) for item in payload.get("response", []) if isinstance(item, dict)]
         payload["response"] = fights

@@ -39,6 +39,7 @@ from services.api_manager import APIManager
 from services.post_match_service import PostMatchService
 from services.player_availability_service import PlayerAvailabilityService
 from auth.auth_manager import AuthManager
+from auth.session_security import authenticated_session_is_active, clear_authenticated_session
 from auth.streamlit_views import render_account_navigation, render_auth_screen
 from auth.landing_page import render_landing_page
 from usage.usage_tracker import UsageTracker
@@ -1632,7 +1633,7 @@ def sport_screen() -> None:
     search_text = st.session_state.get("search_text", "").strip().lower()
     simulations = int(st.session_state["simulaciones"])
 
-    header_columns = st.columns([1, 5])
+    header_columns = st.columns([1, 6], vertical_alignment="center")
 
     with header_columns[0]:
         if st.button(
@@ -1646,50 +1647,46 @@ def sport_screen() -> None:
             st.rerun()
 
     with header_columns[1]:
-        st.markdown(
-            f"""
-            <div class="sport-card">
-                <div class="sport-logo">{SPORT_LOGOS.get(sport, "🏟️")}</div>
-                <div class="sport-name">{sport}</div>
-                <div class="sport-date">Partidos del {selected_date.strftime("%d/%m/%Y")}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.subheader(f"{SPORT_LOGOS.get(sport, '🏟️')} {sport}")
+        st.caption(f"Eventos del {selected_date.strftime('%d/%m/%Y')}")
 
-    date_columns = st.columns([1, 2, 1, 1])
-    with date_columns[0]:
-        if st.button("Anterior", icon=":material/chevron_left:", width="stretch", key="previous_day"):
-            st.session_state["selected_date"] = selected_date - timedelta(days=1)
-            reset_game_results()
-            st.rerun()
-    with date_columns[1]:
-        picked_date = st.date_input(
-            "Fecha",
-            value=selected_date,
-            format="YYYY/MM/DD",
-            key=f"sport_date_{selected_date.isoformat()}",
-        )
-    with date_columns[2]:
-        if st.button("Hoy", icon=":material/today:", width="stretch", key="today_day"):
-            st.session_state["selected_date"] = date.today()
-            reset_game_results()
-            st.rerun()
-    with date_columns[3]:
-        if st.button("Siguiente", icon=":material/chevron_right:", width="stretch", key="next_day"):
-            st.session_state["selected_date"] = selected_date + timedelta(days=1)
-            reset_game_results()
-            st.rerun()
-    if picked_date != selected_date:
-        st.session_state["selected_date"] = picked_date
+    with st.container(border=True):
+        control_columns = st.columns(2, vertical_alignment="bottom")
+        with control_columns[0]:
+            selected_sport = st.selectbox(
+                "Deporte",
+                SPORT_NAMES,
+                index=SPORT_NAMES.index(sport),
+            )
+        with control_columns[1]:
+            picked_date = st.date_input(
+                "Fecha",
+                value=selected_date,
+                format="YYYY/MM/DD",
+                key=f"sport_date_{selected_date.isoformat()}",
+            )
+        with st.container(horizontal=True, horizontal_alignment="distribute"):
+            previous_day = st.button(
+                "Día anterior", icon=":material/chevron_left:", key="previous_day"
+            )
+            today_day = st.button("Hoy", icon=":material/today:", key="today_day")
+            next_day = st.button(
+                "Día siguiente", icon=":material/chevron_right:", key="next_day"
+            )
+
+    requested_date = selected_date
+    if previous_day:
+        requested_date = selected_date - timedelta(days=1)
+    elif today_day:
+        requested_date = date.today()
+    elif next_day:
+        requested_date = selected_date + timedelta(days=1)
+    elif picked_date != selected_date:
+        requested_date = picked_date
+    if requested_date != selected_date:
+        st.session_state["selected_date"] = requested_date
         reset_game_results()
         st.rerun()
-
-    selected_sport = st.selectbox(
-        "Cambiar de deporte",
-        SPORT_NAMES,
-        index=SPORT_NAMES.index(sport),
-    )
 
     if selected_sport != sport:
         st.session_state["selected_sport"] = selected_sport
@@ -1712,15 +1709,15 @@ def sport_screen() -> None:
     ]
     sport_error = st.session_state.get("prefetched_errors", {}).get(sport)
 
-    st.markdown("<div class='section-title'>Competencia</div>", unsafe_allow_html=True)
-
-    league_view = st.segmented_control(
-        "Vista de ligas",
-        ["Principales", "Todas"],
-        default=st.session_state.get("league_view_mode", "Todas"),
-        key=f"league_view_selector_{sport}",
-        width="stretch",
-    ) or "Principales"
+    filter_columns = st.columns([1, 2], vertical_alignment="bottom")
+    with filter_columns[0]:
+        league_view = st.segmented_control(
+            "Ligas",
+            ["Principales", "Todas"],
+            default=st.session_state.get("league_view_mode", "Todas"),
+            key=f"league_view_selector_{sport}",
+            width="stretch",
+        ) or "Principales"
     st.session_state["league_view_mode"] = league_view
 
     visible_sport_games = filter_games_by_league_view(
@@ -1759,11 +1756,12 @@ def sport_screen() -> None:
     if current_competition not in competition_labels:
         current_competition = "Todas las competencias"
 
-    selected_competition_label = st.selectbox(
-        "Selecciona la competencia",
-        competition_labels,
-        index=competition_labels.index(current_competition),
-    )
+    with filter_columns[1]:
+        selected_competition_label = st.selectbox(
+            "Competencia",
+            competition_labels,
+            index=competition_labels.index(current_competition),
+        )
 
     st.session_state["selected_competition_label"] = selected_competition_label
 
@@ -1796,10 +1794,10 @@ def sport_screen() -> None:
 
     if sport == "Fútbol":
         show_all_quality = st.toggle(
-            "Ver todos los partidos",
+            "Incluir partidos de baja confianza",
             value=False,
             key="show_all_football_quality",
-            help="Incluye partidos ya evaluados con calidad inferior a 60%.",
+            help="Muestra también partidos evaluados con calidad inferior a 60%.",
         )
         known_quality = st.session_state.get("football_match_quality", {})
         if not show_all_quality:
@@ -1814,7 +1812,7 @@ def sport_screen() -> None:
     st.markdown("<div class='section-title'>Partidos del día</div>", unsafe_allow_html=True)
 
     if sport_error:
-        st.error(f"No pudimos cargar los partidos de {sport}. Intenta actualizar los datos.")
+        st.error(f"No pudimos cargar los partidos de {sport} en este momento.")
     elif games:
         st.caption(f"{len(games)} partidos disponibles")
     elif all_sport_games and all(game.get("is_finished") for game in all_sport_games):
@@ -1824,32 +1822,6 @@ def sport_screen() -> None:
         )
     else:
         st.info("No hay partidos que coincidan con los filtros seleccionados.")
-
-    with st.expander("Opciones de actualización"):
-        st.caption(f"Consulta nuevamente la información de {sport}.")
-        if st.button(
-            "Actualizar eventos",
-            width="stretch",
-            icon=":material/refresh:",
-            key="refresh_events",
-        ):
-            with st.spinner("Actualizando partidos..."):
-                prefetch_all_sports(selected_date=selected_date, force_refresh=True, sports=[sport])
-
-            reset_game_results()
-            st.rerun()
-
-        if st.button(
-            "Actualizar todos los deportes",
-            width="stretch",
-            icon=":material/sync:",
-            key="refresh_all_events",
-        ):
-            with st.spinner("Actualizando todos los deportes..."):
-                prefetch_all_sports(selected_date=selected_date, force_refresh=True)
-
-            reset_game_results()
-            st.rerun()
 
     selected_match = None
 
@@ -2238,14 +2210,14 @@ def run_analysis(
                 progress_bar.empty()
                 status_text.empty()
                 simulation_counter.empty()
-                st.error("No pudimos completar el análisis en este momento. Intenta actualizar los datos.")
+                st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
 
         except Exception as error:
             logger.exception("Falló el análisis real de fútbol: %s", error)
             progress_bar.empty()
             status_text.empty()
             simulation_counter.empty()
-            st.error("No pudimos completar el análisis en este momento. Intenta actualizar los datos.")
+            st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
 
 
     # ---------------- OTROS ENGINES REALES FUTUROS ----------------
@@ -2324,7 +2296,7 @@ def run_analysis(
             progress_bar.empty()
             status_text.empty()
             simulation_counter.empty()
-            st.error("No pudimos completar el análisis en este momento. Intenta actualizar los datos.")
+            st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
             return
 
     # ---------------- MODO INICIAL POR DEPORTE ----------------
@@ -2436,12 +2408,6 @@ def run_analysis(
     if run_id:
         st.caption("Análisis guardado en tu historial.")
 
-    st.info(
-        f"Este flujo ya está listo para {sport}. "
-        "Cuando agregues el engine especializado, app.py no tendrá que cambiar."
-    )
-
-
 # =========================================================
 # INICIO
 # =========================================================
@@ -2504,9 +2470,14 @@ if initialization_failed:
     st.stop()
 
 current_user = st.session_state.get("current_user")
-if current_user:
-    current_user = auth_manager.get_user(current_user["id"])
-    st.session_state["current_user"] = current_user
+if current_user and authenticated_session_is_active(st.session_state):
+    refreshed_user = auth_manager.get_user(current_user["id"])
+    if refreshed_user is None:
+        clear_authenticated_session(st.session_state)
+        current_user = None
+    else:
+        current_user = refreshed_user
+        st.session_state["current_user"] = refreshed_user
 if current_user is None:
     if st.session_state.get("public_screen") == "auth":
         render_auth_screen(auth_manager)
@@ -2519,7 +2490,7 @@ render_account_navigation(current_user)
 today_key = date.today().isoformat()
 if st.session_state.get("last_cache_cleanup") != today_key:
     reviewed_runs = PostMatchService().process_cached_results()
-    deleted_cache_files = cleanup_expired_cache(max_age_days=7)
+    deleted_cache_files = cleanup_expired_cache(max_age_days=14)
     learning_enabled = (os.getenv("ENABLE_CONTINUOUS_LEARNING") or "false").strip().lower() in {
         "1", "true", "yes", "on",
     }

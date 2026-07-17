@@ -11,6 +11,11 @@ from sqlalchemy.pool import StaticPool
 
 from admin.admin_service import AdminService
 from auth.auth_manager import AuthManager
+from auth.session_security import (
+    authenticated_session_is_active,
+    clear_authenticated_session,
+    establish_authenticated_session,
+)
 from auth.streamlit_views import (
     clear_login_failures,
     login_lock_remaining,
@@ -74,6 +79,48 @@ class SaaSFlowTests(unittest.TestCase):
         record_login_failure(state, now=1400)
         clear_login_failures(state)
         self.assertEqual(state, {})
+
+    def test_authenticated_session_survives_navigation_and_expires_when_idle(self) -> None:
+        state = {"screen": "home", "selected_sport": "Fútbol"}
+        establish_authenticated_session(state, self.user)
+        session_id = state["auth_session_id"]
+
+        state["screen"] = "sport"
+        self.assertTrue(
+            authenticated_session_is_active(
+                state,
+                now=state["auth_last_activity"] + 60,
+            )
+        )
+        self.assertEqual(state["current_user"]["id"], self.user["id"])
+        self.assertEqual(state["auth_session_id"], session_id)
+
+        last_activity = state["auth_last_activity"]
+        self.assertFalse(
+            authenticated_session_is_active(
+                state,
+                now=last_activity + 12 * 60 * 60 + 1,
+            )
+        )
+        self.assertIsNone(state["current_user"])
+        self.assertEqual(state["screen"], "home")
+
+    def test_logout_clears_user_private_state(self) -> None:
+        state = {
+            "screen": "admin",
+            "current_user": self.user,
+            "auth_session_id": "secret",
+            "auth_last_activity": 1.0,
+            "checkout_plan": "pro",
+            "cookies_accepted": True,
+        }
+
+        clear_authenticated_session(state)
+
+        self.assertIsNone(state["current_user"])
+        self.assertNotIn("auth_session_id", state)
+        self.assertNotIn("checkout_plan", state)
+        self.assertTrue(state["cookies_accepted"])
 
     def test_free_limit_is_per_sport_and_resets_by_date(self) -> None:
         day_one = date(2026, 7, 16)

@@ -4,6 +4,7 @@ from typing import Any
 
 from services.base_sports_api import BaseSportsAPI
 from core.event_time import sports_timezone
+from core.event_cache_policy import event_cache_hours
 
 
 class HockeyAPI(BaseSportsAPI):
@@ -31,7 +32,7 @@ class HockeyAPI(BaseSportsAPI):
         if season is not None:
             params["season"] = season
             cache_key += f"_season_{season}"
-        payload = self.get("games", params, cache_key, force_refresh, 6)
+        payload = self.get("games", params, cache_key, force_refresh, event_cache_hours(date))
         for game in payload.get("response", []):
             if not isinstance(game, dict):
                 continue

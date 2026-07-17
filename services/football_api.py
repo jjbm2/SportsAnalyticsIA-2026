@@ -4,6 +4,7 @@ import unicodedata
 
 from core.logger import logger
 from core.event_time import sports_timezone
+from core.event_cache_policy import event_cache_hours
 from services.base_sports_api import BaseSportsAPI
 from services.sportmonks_football_api import SportmonksFootballAPI
 
@@ -57,7 +58,7 @@ class FootballAPI(BaseSportsAPI):
                 params=params,
                 cache_key=cache_key,
                 force_refresh=force_refresh,
-                max_hours=6
+                max_hours=event_cache_hours(date)
             )
         except Exception as error:
             primary_error = error
