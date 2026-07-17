@@ -11,6 +11,11 @@ from sqlalchemy.pool import StaticPool
 
 from admin.admin_service import AdminService
 from auth.auth_manager import AuthManager
+from auth.streamlit_views import (
+    clear_login_failures,
+    login_lock_remaining,
+    record_login_failure,
+)
 from billing.billing_manager import BillingManager
 from database.database import Base
 from database.models import PaymentRequest, Subscription, User
@@ -48,6 +53,25 @@ class SaaSFlowTests(unittest.TestCase):
         self.assertIsNone(self.auth.authenticate("user@example.com", "wrong-password"))
         with self.assertRaises(ValueError):
             self.auth.register("USER@example.com", "AnotherPass123")
+
+    def test_registration_rejects_weak_or_oversized_passwords(self) -> None:
+        for password in ("abcdefgh", "12345678", " Password1", "Password1 "):
+            with self.subTest(password=password), self.assertRaises(ValueError):
+                self.auth.register(f"weak-{abs(hash(password))}@example.com", password)
+        with self.assertRaises(ValueError):
+            self.auth.register("long@example.com", "A1" + ("ñ" * 36))
+
+    def test_login_attempts_are_temporarily_limited_per_session(self) -> None:
+        state = {}
+        for attempt in range(4):
+            self.assertEqual(record_login_failure(state, now=1000 + attempt), 0)
+        self.assertEqual(record_login_failure(state, now=1004), 300)
+        self.assertEqual(login_lock_remaining(state, now=1005), 299)
+        self.assertEqual(login_lock_remaining(state, now=1304), 0)
+        self.assertEqual(state, {})
+        record_login_failure(state, now=1400)
+        clear_login_failures(state)
+        self.assertEqual(state, {})
 
     def test_free_limit_is_per_sport_and_resets_by_date(self) -> None:
         day_one = date(2026, 7, 16)
