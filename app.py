@@ -525,6 +525,15 @@ def match_quality_key(match: dict[str, Any]) -> str:
     return str(match.get("game_id") or f'{match.get("home", "")}::{match.get("away", "")}::{match.get("date", "")}')
 
 
+def analysis_request_key(sport: str, match: dict[str, Any] | None) -> str:
+    """Create a stable per-event key used to prevent repeated submissions."""
+    if match:
+        event_key = match_quality_key(match)
+    else:
+        event_key = "no-event"
+    return f"{sport}::{event_key}"
+
+
 def remember_match_quality(match: dict[str, Any], result: dict[str, Any]) -> None:
     score = result.get("match_quality_score")
     if score is None:
@@ -1924,10 +1933,9 @@ def sport_screen() -> None:
 
     current_user = st.session_state.get("current_user")
     usage_status = usage_tracker.can_user_predict(current_user["id"], sport)
-    can_analyze = (
-        (selected_match is not None or sport not in {"Fórmula 1", "Hockey", "MMA"})
-        and usage_status["allowed"]
-    )
+    request_key = analysis_request_key(sport, selected_match)
+    analysis_completed = st.session_state.get("analysis_completed") == request_key
+    can_analyze = selected_match is not None and usage_status["allowed"]
     if usage_status["limit"] is None:
         st.caption("Tu plan permite análisis ilimitados por deporte.")
     else:
@@ -1937,14 +1945,17 @@ def sport_screen() -> None:
         )
     if not usage_status["allowed"]:
         st.warning("Has alcanzado tu límite diario para este deporte")
+    if analysis_completed:
+        st.caption("Este evento ya fue analizado en esta sesión.")
     if st.button(
         "Analizar evento",
         width="stretch",
         type="primary",
         icon=":material/analytics:",
-        disabled=not can_analyze,
+        disabled=not can_analyze or analysis_completed,
         key="analyze_event",
     ):
+        st.session_state["analysis_in_progress"] = request_key
         reserved_usage = False
         try:
             usage_tracker.record_prediction(current_user["id"], sport)
@@ -1956,7 +1967,9 @@ def sport_screen() -> None:
                 sport=sport,
                 selected_match=selected_match,
             )
-            if not analysis_completed:
+            if analysis_completed:
+                st.session_state["analysis_completed"] = request_key
+            else:
                 usage_tracker.release_prediction(current_user["id"], sport)
                 reserved_usage = False
         except PermissionError:
@@ -1969,6 +1982,9 @@ def sport_screen() -> None:
                 except Exception as release_error:
                     logger.exception("No se pudo devolver el uso reservado: %s", release_error)
             st.toast("No fue posible completar el análisis. Intenta nuevamente.", icon=":material/warning:")
+        finally:
+            if st.session_state.get("analysis_in_progress") == request_key:
+                st.session_state.pop("analysis_in_progress", None)
 
 # =========================================================
 # ANÁLISIS
@@ -2086,10 +2102,11 @@ def run_analysis(
 
             return bool(run_id)
 
-        except FileNotFoundError:
+        except Exception as predictor_error:
+            logger.warning("El predictor ML de fútbol no estuvo disponible: %s", predictor_error)
             st.warning(
-                "No se encontró el modelo entrenado de fútbol. "
-                "Se usará el motor base Poisson + Monte Carlo."
+                "El modelo ML no pudo completar esta evaluación. "
+                "Se verificará el historial real con el motor estadístico."
             )
 
             try:
@@ -2106,6 +2123,7 @@ def run_analysis(
                     force_refresh=force_refresh,
                     provider=selected_match.get("provider", "api_sports"),
                 )
+                engine.validate_team_profiles(home_profile, away_profile)
 
                 status_text.write("60% - Comparando ataque, defensa y forma reciente")
                 progress_bar.progress(60)
@@ -2227,13 +2245,8 @@ def run_analysis(
                 status_text.empty()
                 simulation_counter.empty()
                 st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
-
-        except Exception as error:
-            logger.exception("Falló el análisis real de fútbol: %s", error)
-            progress_bar.empty()
-            status_text.empty()
-            simulation_counter.empty()
-            st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
+                st.info("No hay suficiente historial real para publicar una predicción confiable.")
+                return False
 
 
     # ---------------- OTROS ENGINES REALES FUTUROS ----------------
@@ -2312,16 +2325,13 @@ def run_analysis(
             progress_bar.empty()
             status_text.empty()
             simulation_counter.empty()
-            if sport not in {"Béisbol", "Basketball", "NFL"}:
-                st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
-                return False
-            st.warning(
-                "Los datos históricos especializados no están disponibles. "
-                "Mostramos una estimación estadística inicial con confianza limitada."
-            )
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            simulation_counter = st.empty()
+            st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
+            st.info("No hay suficiente historial real para publicar una predicción confiable.")
+            return False
+
+    # La simulación genérica ya no se publica: sin datos reales no hay predicción.
+    st.info("Este evento todavía no cuenta con datos históricos suficientes para un análisis confiable.")
+    return False
 
     # ---------------- MODO INICIAL POR DEPORTE ----------------
     home_wins = 0

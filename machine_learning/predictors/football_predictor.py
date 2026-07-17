@@ -115,6 +115,7 @@ class FootballPredictor:
             force_refresh=force_refresh,
             provider=provider,
         )
+        self.poisson_engine.validate_team_profiles(home_profile, away_profile)
 
         home_lambda, away_lambda = self.poisson_engine.calculate_expected_goals(
             home_profile=home_profile,

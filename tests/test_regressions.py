@@ -421,6 +421,19 @@ class RegressionTests(unittest.TestCase):
         self.assertGreaterEqual(MIN_SIMULATIONS, 5_000)
         self.assertGreaterEqual(DEFAULT_SIMULATIONS, MIN_SIMULATIONS)
 
+    def test_football_rejects_neutral_profiles_without_real_history(self) -> None:
+        with self.assertRaisesRegex(ValueError, "suficiente historial real"):
+            FootballPredictionEngine.validate_team_profiles(
+                {"played": 0, "avg_scored": 1.0, "avg_conceded": 1.0},
+                {"played": 0, "avg_scored": 1.0, "avg_conceded": 1.0},
+            )
+
+    def test_football_accepts_profiles_with_real_history(self) -> None:
+        FootballPredictionEngine.validate_team_profiles(
+            {"played": 8, "avg_scored": 1.8, "avg_conceded": 0.9},
+            {"played": 7, "avg_scored": 1.1, "avg_conceded": 1.4},
+        )
+
     def test_formula1_analysis_without_network(self) -> None:
         engine = Formula1PredictionEngine()
         engine.api = _Formula1Results()

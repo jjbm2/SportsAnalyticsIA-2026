@@ -56,6 +56,21 @@ class FootballPredictionEngine:
 
         return home_lambda, away_lambda
 
+    @staticmethod
+    def validate_team_profiles(
+        home_profile: dict[str, Any],
+        away_profile: dict[str, Any],
+        minimum_matches: int = 3,
+    ) -> None:
+        """Reject neutral defaults that would create a fabricated home bias."""
+        home_played = int(home_profile.get("played") or 0)
+        away_played = int(away_profile.get("played") or 0)
+        if min(home_played, away_played) < minimum_matches:
+            raise ValueError(
+                "No hay suficiente historial real para analizar ambos equipos "
+                f"({home_played} y {away_played} partidos)."
+            )
+
     def run_monte_carlo(
         self,
         home_lambda: float,
@@ -170,6 +185,8 @@ class FootballPredictionEngine:
             away_team_id=away_team_id,
             force_refresh=force_refresh,
         )
+
+        self.validate_team_profiles(home_profile, away_profile)
 
         home_lambda, away_lambda = self.calculate_expected_goals(
             home_profile=home_profile,
