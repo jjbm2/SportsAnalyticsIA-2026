@@ -13,6 +13,10 @@ from services.http_client import build_retry_session
 load_dotenv()
 
 
+class ProviderResponseError(RuntimeError):
+    """Raised when a provider returns HTTP 200 with an application error."""
+
+
 class BaseSportsAPI:
     def __init__(self, base_url: str, sport_name: str, require_api_key: bool = True):
         self.api_key = (os.getenv("API_SPORTS_KEY") or "").strip()
@@ -127,6 +131,14 @@ class BaseSportsAPI:
             raise
 
         data = response.json()
+        if data.get("errors"):
+            stale_data = self._read_cache(cache_file=cache_file, max_hours=None)
+            if stale_data is not None:
+                stale_data["_source"] = "stale_cache"
+                return stale_data
+            raise ProviderResponseError(
+                f"{self.sport_name} provider rejected the request"
+            )
         data["_source"] = "api"
 
         self._save_cache(

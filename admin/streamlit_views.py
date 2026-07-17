@@ -6,6 +6,7 @@ from admin.admin_service import AdminService
 from billing.billing_manager import BillingManager
 from core.plans import PLANS
 from core.system_health import deployment_health
+from services.provider_health import check_sports_connectivity
 
 
 def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager, sports: list[str]) -> None:
@@ -56,6 +57,24 @@ def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager
                     "Configurada" if health["balldontlie"] else "Pendiente",
                     border=True,
                 )
+
+            if st.button(
+                "Verificar eventos de hoy",
+                icon=":material/sync:",
+                key="admin_check_sports_connectivity",
+            ):
+                with st.spinner("Comprobando proveedores deportivos..."):
+                    st.session_state["sports_connectivity"] = check_sports_connectivity(sports)
+
+            for item in st.session_state.get("sports_connectivity", []):
+                color = "green" if item["status"] == "connected" else "red"
+                label = f'{item["sport"]}: {item["events"]} eventos'
+                st.badge(
+                    label,
+                    icon=":material/check_circle:" if color == "green" else ":material/error:",
+                    color=color,
+                )
+                st.caption(item["detail"])
 
     with users_tab:
         import pandas as pd

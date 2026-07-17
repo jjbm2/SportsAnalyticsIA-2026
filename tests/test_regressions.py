@@ -36,6 +36,8 @@ from services.player_availability_service import PlayerAvailabilityService
 from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
 from services.http_client import TRANSIENT_STATUS_CODES, build_retry_session
+from services.base_sports_api import BaseSportsAPI, ProviderResponseError
+from services.provider_health import check_sports_connectivity
 from core.league_filters import filter_games_by_league_view
 from core.market_risk import apply_probability_risk, probability_risk_profile
 from core.market_visibility import visible_markets
@@ -72,6 +74,47 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_provider_application_error_is_not_cached_as_games(self) -> None:
+        cache_dir = Path("data/test_provider_error_cache")
+        cache_file = cache_dir / "games_unique.json"
+        cache_file.unlink(missing_ok=True)
+        with patch.dict("os.environ", {"API_SPORTS_KEY": "configured"}):
+            api = BaseSportsAPI("https://provider.invalid", "test")
+        api.cache_dir = cache_dir
+        api.cache_dir.mkdir(parents=True, exist_ok=True)
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"errors": {"token": "rejected"}, "response": []}
+        api.http.get = Mock(return_value=response)
+
+        try:
+            with self.assertRaises(ProviderResponseError):
+                api.get("games", cache_key="unique", force_refresh=True)
+            self.assertFalse(cache_file.exists())
+        finally:
+            cache_file.unlink(missing_ok=True)
+            cache_dir.rmdir()
+
+    def test_provider_health_distinguishes_empty_schedule_from_error(self) -> None:
+        class FakeManager:
+            def __init__(self, sport: str):
+                self.sport = sport
+
+            def get_games_by_date(self, **_: object) -> dict:
+                if self.sport == "Error":
+                    raise RuntimeError("secret provider details")
+                return {"response": [] if self.sport == "Vacío" else [{"id": 1}], "errors": []}
+
+        results = check_sports_connectivity(
+            ["Con eventos", "Vacío", "Error"],
+            fixture_date="2026-07-16",
+            manager_factory=FakeManager,
+        )
+
+        self.assertEqual([item["status"] for item in results], ["connected", "connected", "error"])
+        self.assertEqual([item["events"] for item in results], [1, 0, 0])
+        self.assertNotIn("secret", results[2]["detail"])
+
     def test_streamlit_entrypoint_defers_heavy_ml_imports(self) -> None:
         tree = ast.parse(Path("app.py").read_text(encoding="utf-8"))
         top_level_modules = set()
