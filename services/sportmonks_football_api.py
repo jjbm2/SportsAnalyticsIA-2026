@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from core.game_status import is_finished_status
 from core.paths import CACHE_DIR
+from services.http_client import build_retry_session
 
 
 load_dotenv()
@@ -23,6 +24,7 @@ class SportmonksFootballAPI:
 
     def __init__(self) -> None:
         self.token = os.getenv("SPORTMONKS_API_TOKEN", "").strip()
+        self.http = build_retry_session()
         self.cache_dir = CACHE_DIR / "sportmonks_football"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -81,7 +83,7 @@ class SportmonksFootballAPI:
         page = 1
         try:
             while True:
-                response = requests.get(
+                response = self.http.get(
                     f"{self.base_url}/{path.lstrip('/')}",
                     params={**params, "api_token": self.token, "per_page": 50, "page": page},
                     timeout=30,

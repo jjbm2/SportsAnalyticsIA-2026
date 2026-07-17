@@ -10,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 
 from core.paths import CACHE_DIR
+from services.http_client import build_retry_session
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ class BallDontLieNBAAPI:
 
     def __init__(self) -> None:
         self.api_key = os.getenv("BALLDONTLIE_API_KEY") or os.getenv("BALL_DONT_LIE_API_KEY")
+        self.http = build_retry_session()
         self.cache_dir = CACHE_DIR / "balldontlie_nba"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -41,7 +43,7 @@ class BallDontLieNBAAPI:
         if cached is not None and not force_refresh:
             return cached
         try:
-            response = requests.get(
+            response = self.http.get(
                 f"{self.base_url}/{endpoint}", headers={"Authorization": self.api_key},
                 params=params, timeout=20,
             )

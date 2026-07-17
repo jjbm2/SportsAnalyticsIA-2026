@@ -8,6 +8,7 @@ import requests
 from dotenv import load_dotenv
 
 from core.paths import CACHE_DIR
+from services.http_client import build_retry_session
 
 load_dotenv()
 
@@ -23,6 +24,7 @@ class BaseSportsAPI:
         self.sport_name = sport_name.lower()
 
         self.headers = {"x-apisports-key": self.api_key} if self.api_key else {}
+        self.http = build_retry_session()
 
         self.cache_dir = CACHE_DIR / self.sport_name
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +112,7 @@ class BaseSportsAPI:
                 return cached_data
 
         try:
-            response = requests.get(
+            response = self.http.get(
                 f"{self.base_url}/{endpoint.lstrip('/')}",
                 headers=self.headers,
                 params=params,

@@ -34,6 +34,7 @@ from services.football_api import FootballAPI
 from services.player_availability_service import PlayerAvailabilityService
 from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
+from services.http_client import TRANSIENT_STATUS_CODES, build_retry_session
 from core.league_filters import filter_games_by_league_view
 from core.market_risk import apply_probability_risk, probability_risk_profile
 from core.market_visibility import visible_markets
@@ -70,6 +71,14 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_http_retries_are_bounded_to_transient_get_failures(self) -> None:
+        session = build_retry_session()
+        retries = session.get_adapter("https://").max_retries
+
+        self.assertEqual(retries.total, 2)
+        self.assertEqual(retries.allowed_methods, frozenset({"GET"}))
+        self.assertEqual(tuple(retries.status_forcelist), TRANSIENT_STATUS_CODES)
+
     def test_neon_database_url_uses_psycopg_driver(self) -> None:
         with patch.dict(
             "os.environ",

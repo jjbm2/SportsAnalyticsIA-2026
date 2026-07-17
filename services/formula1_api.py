@@ -8,12 +8,14 @@ from typing import Any
 import requests
 
 from core.paths import CACHE_DIR
+from services.http_client import build_retry_session
 
 
 class Formula1API:
     base_url = "https://api.jolpi.ca/ergast/f1"
 
     def __init__(self) -> None:
+        self.http = build_retry_session()
         self.cache_dir = CACHE_DIR / "formula1"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -99,7 +101,7 @@ class Formula1API:
         if cached is not None and not force_refresh:
             return cached
         try:
-            response = requests.get(
+            response = self.http.get(
                 f"{self.base_url}/{path.lstrip('/')}",
                 params=params,
                 timeout=30,
