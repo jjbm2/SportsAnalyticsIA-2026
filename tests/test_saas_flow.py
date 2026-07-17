@@ -20,6 +20,7 @@ from billing.billing_manager import BillingManager
 from database.database import Base
 from database.models import PaymentRequest, Subscription, User
 from database.prediction_repository import PredictionRepository
+from promotions.promotion_service import PromotionService
 from usage.usage_tracker import UsageTracker
 
 
@@ -37,6 +38,7 @@ class SaaSFlowTests(unittest.TestCase):
         self.usage = UsageTracker(self.sessions)
         self.billing = BillingManager(self.sessions, Path("data/test_payment_receipts"))
         self.admin = AdminService(self.sessions)
+        self.promotions = PromotionService(self.sessions)
         self.admin_user = self.auth.register("admin@example.com", "AdminPass123", is_admin=True)
         self.user = self.auth.register("user@example.com", "UserPass123")
 
@@ -81,6 +83,28 @@ class SaaSFlowTests(unittest.TestCase):
         self.assertFalse(self.usage.can_user_predict(self.user["id"], "Fútbol", day_one)["allowed"])
         self.assertTrue(self.usage.can_user_predict(self.user["id"], "Basketball", day_one)["allowed"])
         self.assertTrue(self.usage.can_user_predict(self.user["id"], "Fútbol", day_two)["allowed"])
+
+    def test_opening_promotion_grants_five_daily_predictions_for_five_days(self) -> None:
+        start = date(2026, 7, 16)
+        status = self.promotions.redeem(self.user["id"], " apertura5 ", start)
+        self.assertTrue(status["active"])
+        self.assertEqual(status["days_remaining"], 5)
+        for _ in range(5):
+            self.usage.record_prediction(self.user["id"], "Fútbol", start)
+        self.assertFalse(self.usage.can_user_predict(self.user["id"], "Fútbol", start)["allowed"])
+        self.assertTrue(self.usage.can_user_predict(self.user["id"], "Basketball", start)["allowed"])
+        self.assertTrue(self.promotions.status(self.user["id"], start + timedelta(days=4))["active"])
+        expired = self.promotions.status(self.user["id"], start + timedelta(days=5))
+        self.assertTrue(expired["expired"])
+        self.assertEqual(
+            self.usage.can_user_predict(self.user["id"], "Fútbol", start + timedelta(days=5))["limit"],
+            1,
+        )
+
+    def test_opening_promotion_can_only_be_redeemed_once(self) -> None:
+        self.promotions.redeem(self.user["id"], "APERTURA5", date(2026, 7, 16))
+        with self.assertRaises(ValueError):
+            self.promotions.redeem(self.user["id"], "APERTURA5", date(2026, 7, 17))
 
     def test_manual_payment_approval_activates_plan_and_subscription(self) -> None:
         request = self.billing.create_payment_request(self.user["id"], "pro", "yearly")

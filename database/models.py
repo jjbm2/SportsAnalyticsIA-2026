@@ -175,6 +175,20 @@ class UserUsage(Base):
     extra_predictions = Column(Integer, nullable=False, default=0)
 
 
+class PromotionRedemption(Base):
+    __tablename__ = "promotion_redemptions"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_promotion_redemption_user"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    code = Column(String, nullable=False, index=True)
+    activated_on = Column(Date, nullable=False)
+    ends_on = Column(Date, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class PaymentRequest(Base):
     __tablename__ = "payment_requests"
 

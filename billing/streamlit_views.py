@@ -7,6 +7,7 @@ import streamlit as st
 
 from billing.billing_manager import BillingManager
 from core.plans import PLANS, Plan, get_plan, plan_amount
+from promotions.promotion_service import PromotionService
 from usage.usage_tracker import UsageTracker
 
 
@@ -26,8 +27,10 @@ def render_account_screen(
     subscription = billing.active_subscription(user["id"])
     plan = get_plan("full" if user.get("is_admin") else (subscription["plan"] if subscription else "free"))
     usage_rows = [usage.can_user_predict(user["id"], sport) | {"sport": sport} for sport in sports]
+    promotion = PromotionService().status(user["id"])
 
     _render_profile_dashboard(user, plan, subscription, usage_rows)
+    _render_opening_promotion(user, promotion)
     _render_daily_usage(usage_rows)
     _render_payment_statuses(billing.list_requests(user_id=user["id"]))
 
@@ -83,6 +86,50 @@ def _render_daily_usage(rows: list[dict]) -> None:
                 st.metric("Uso de hoy", available)
                 if limit is not None:
                     st.progress(min(1.0, item["used"] / max(1, limit + item["extra"])))
+
+
+def _render_opening_promotion(user: dict, promotion: dict) -> None:
+    if user.get("is_admin"):
+        return
+    if promotion.get("active"):
+        with st.container(border=True):
+            st.markdown(":green-badge[Promoción activa] **Apertura SportsAnalyticsAI**")
+            st.write("Tienes 5 predicciones diarias por deporte durante el periodo promocional.")
+            st.caption(
+                f"Quedan {promotion['days_remaining']} días · termina el "
+                f"{promotion['ends_on'].strftime('%d/%m/%Y')}."
+            )
+        return
+    if promotion.get("expired"):
+        with st.container(border=True):
+            st.markdown("### Continúa con Basic")
+            st.write("Tu promoción terminó. Conserva 5 predicciones diarias por deporte con Basic.")
+            if st.button(
+                "Elegir plan Basic",
+                type="primary",
+                icon=":material/arrow_forward:",
+                key="expired_promo_basic",
+            ):
+                _select_checkout("basic", "monthly")
+        return
+    if user.get("plan") != "free":
+        return
+
+    with st.container(border=True):
+        st.markdown("### Promoción de apertura")
+        st.write("Activa 5 predicciones al día por deporte durante 5 días.")
+        with st.form("opening_promotion_form", border=False):
+            code = st.text_input("Código promocional", max_chars=40)
+            submitted = st.form_submit_button(
+                "Activar promoción", type="primary", icon=":material/redeem:"
+            )
+        if submitted:
+            try:
+                PromotionService().redeem(user["id"], code)
+                st.success("Promoción activada. Ya tienes 5 predicciones diarias por deporte.")
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
 
 
 def _render_pricing_card(code: str, plan: Plan, current_code: str) -> None:

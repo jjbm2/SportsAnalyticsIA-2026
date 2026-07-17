@@ -1,0 +1,1 @@
+"""Promociones comerciales persistentes."""
