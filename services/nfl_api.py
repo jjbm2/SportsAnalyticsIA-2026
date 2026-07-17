@@ -1,4 +1,5 @@
 from services.base_sports_api import BaseSportsAPI
+from core.event_time import sports_timezone
 
 
 class NFLAPI(BaseSportsAPI):
@@ -26,11 +27,9 @@ class NFLAPI(BaseSportsAPI):
         season: int | None = None,
         force_refresh: bool = False
     ):
-        params = {
-            "date": date
-        }
+        params = {"date": date, "timezone": str(sports_timezone())}
 
-        cache_key = date
+        cache_key = f"{date}_{str(sports_timezone()).replace('/', '_')}"
 
         if league_id is not None:
             params["league"] = league_id

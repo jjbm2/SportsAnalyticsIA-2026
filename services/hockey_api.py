@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.base_sports_api import BaseSportsAPI
+from core.event_time import sports_timezone
 
 
 class HockeyAPI(BaseSportsAPI):
@@ -22,8 +23,8 @@ class HockeyAPI(BaseSportsAPI):
         season: int | None = None,
         force_refresh: bool = False,
     ) -> dict[str, Any]:
-        params: dict[str, Any] = {"date": date}
-        cache_key = date
+        params: dict[str, Any] = {"date": date, "timezone": str(sports_timezone())}
+        cache_key = f"{date}_{str(sports_timezone()).replace('/', '_')}"
         if league_id is not None:
             params["league"] = league_id
             cache_key += f"_league_{league_id}"

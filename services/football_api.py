@@ -3,6 +3,7 @@ import re
 import unicodedata
 
 from core.logger import logger
+from core.event_time import sports_timezone
 from services.base_sports_api import BaseSportsAPI
 from services.sportmonks_football_api import SportmonksFootballAPI
 
@@ -35,10 +36,11 @@ class FootballAPI(BaseSportsAPI):
         force_refresh: bool = False
     ):
         params = {
-            "date": date
+            "date": date,
+            "timezone": str(sports_timezone()),
         }
 
-        cache_key = date
+        cache_key = f"{date}_{str(sports_timezone()).replace('/', '_')}"
 
         if league_id is not None:
             params["league"] = league_id

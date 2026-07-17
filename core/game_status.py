@@ -27,6 +27,20 @@ UNAVAILABLE_STATUSES = FINISHED_STATUSES | {
     "INTERRUPTED",
     "PST",
     "ABD",
+    "LIVE",
+    "IN PLAY",
+    "1H",
+    "HT",
+    "2H",
+    "ET",
+    "BT",
+    "P",
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4",
+    "OT",
+    "IN PROGRESS",
 }
 
 
@@ -70,6 +84,8 @@ def is_available_for_pregame(status: Any) -> bool:
         or "CANCEL" in value
         or "POSTPON" in value
         or "SUSPEND" in value
+        or "IN PROGRESS" in value
+        or "IN PLAY" in value
         for value in values
     )
 

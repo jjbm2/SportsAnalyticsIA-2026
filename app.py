@@ -4,7 +4,7 @@ import importlib
 import os
 import random
 from html import escape
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Callable
 
 import streamlit as st
@@ -20,6 +20,7 @@ from core.game_status import (
     is_available_for_pregame,
     is_finished_status,
 )
+from core.event_time import event_has_started, event_local_datetime, event_matches_local_date
 from core.league_filters import filter_games_by_league_view, is_primary_league
 from core.market_visibility import visible_markets
 from core.prediction_confidence import enrich_football_markets
@@ -568,12 +569,10 @@ def format_event_schedule(match: dict[str, Any]) -> str:
     if not raw_date:
         return "Horario por confirmar"
     try:
-        value = raw_date if "T" in raw_date else f"{raw_date}T{raw_time or '00:00:00'}"
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is not None:
-            parsed = parsed.astimezone()
-            return parsed.strftime("%d/%m/%Y · %H:%M hora local")
-        if raw_time:
+        parsed = event_local_datetime(match)
+        if parsed is None:
+            return raw_date
+        if "T" in raw_date or raw_time:
             return parsed.strftime("%d/%m/%Y · %H:%M")
         return parsed.strftime("%d/%m/%Y")
     except ValueError:
@@ -1638,6 +1637,34 @@ def sport_screen() -> None:
             unsafe_allow_html=True,
         )
 
+    date_columns = st.columns([1, 2, 1, 1])
+    with date_columns[0]:
+        if st.button("Anterior", icon=":material/chevron_left:", width="stretch", key="previous_day"):
+            st.session_state["selected_date"] = selected_date - timedelta(days=1)
+            reset_game_results()
+            st.rerun()
+    with date_columns[1]:
+        picked_date = st.date_input(
+            "Fecha",
+            value=selected_date,
+            format="YYYY/MM/DD",
+            key=f"sport_date_{selected_date.isoformat()}",
+        )
+    with date_columns[2]:
+        if st.button("Hoy", icon=":material/today:", width="stretch", key="today_day"):
+            st.session_state["selected_date"] = date.today()
+            reset_game_results()
+            st.rerun()
+    with date_columns[3]:
+        if st.button("Siguiente", icon=":material/chevron_right:", width="stretch", key="next_day"):
+            st.session_state["selected_date"] = selected_date + timedelta(days=1)
+            reset_game_results()
+            st.rerun()
+    if picked_date != selected_date:
+        st.session_state["selected_date"] = picked_date
+        reset_game_results()
+        st.rerun()
+
     selected_sport = st.selectbox(
         "Cambiar de deporte",
         SPORT_NAMES,
@@ -1659,7 +1686,10 @@ def sport_screen() -> None:
             )
         prefetched_games = st.session_state.get("prefetched_games", {})
 
-    all_sport_games = prefetched_games.get(sport, [])
+    all_sport_games = [
+        game for game in prefetched_games.get(sport, [])
+        if event_matches_local_date(game, selected_date)
+    ]
     sport_error = st.session_state.get("prefetched_errors", {}).get(sport)
 
     st.markdown("<div class='section-title'>Competencia</div>", unsafe_allow_html=True)
@@ -1724,7 +1754,7 @@ def sport_screen() -> None:
     games = [
         game
         for game in visible_sport_games
-        if game.get("is_available_for_pregame", True)
+        if game.get("is_available_for_pregame", True) and not event_has_started(game)
     ]
 
     if selected_league:

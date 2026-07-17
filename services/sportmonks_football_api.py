@@ -10,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 
 from core.game_status import is_finished_status
+from core.event_time import sports_timezone
 from core.paths import CACHE_DIR
 from services.http_client import build_retry_session
 
@@ -35,8 +36,8 @@ class SportmonksFootballAPI:
     def get_games_by_date(self, fixture_date: str, force_refresh: bool = False) -> list[dict[str, Any]]:
         data = self._get_paginated(
             path=f"fixtures/date/{fixture_date}",
-            params={"include": "league;participants;state;scores", "timezone": "UTC"},
-            cache_key=f"fixtures_{fixture_date}",
+            params={"include": "league;participants;state;scores", "timezone": str(sports_timezone())},
+            cache_key=f"fixtures_{fixture_date}_{str(sports_timezone()).replace('/', '_')}",
             force_refresh=force_refresh,
             max_hours=6,
         )
@@ -141,7 +142,7 @@ class SportmonksFootballAPI:
             "provider": "sportmonks",
             "fixture": {
                 "id": f"sportmonks:{fixture.get('id')}",
-                "date": str(fixture.get("starting_at") or "").replace(" ", "T") + "Z",
+                "date": str(fixture.get("starting_at") or "").replace(" ", "T"),
                 "status": {
                     "short": state.get("state") or state.get("short_name") or "NS",
                     "long": state.get("name") or "Not Started",
