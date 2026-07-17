@@ -716,7 +716,7 @@ def render_strong_markets(markets: list[dict[str, Any]]) -> None:
     if not public_markets:
         return
     st.markdown("<div class='section-title'>Mercados principales</div>", unsafe_allow_html=True)
-    st.caption("Mostramos señales de 50% o más. El resultado 1X2 permanece visible para comparar escenarios.")
+    st.caption("Mostramos todos los mercados calculados. El resultado 1X2 aparece primero para comparar local, empate y visitante.")
     for start in range(0, len(public_markets), 2):
         columns = st.columns(2)
         for column, market in zip(columns, public_markets[start:start + 2]):

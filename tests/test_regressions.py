@@ -557,7 +557,7 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual([item["risk"] for item in markets], ["Bajo", "Alto", "Muy alto"])
         self.assertEqual(probability_risk_profile(66.0), ("Media-Alta", "Medio"))
 
-    def test_public_markets_filter_keeps_strong_signals_and_all_1x2(self) -> None:
+    def test_public_markets_show_all_valid_signals_with_1x2_first(self) -> None:
         markets = [
             {"market_type": "home_win", "probability": 42, "selection": "Local"},
             {"market_type": "draw", "probability": 28, "selection": "Empate"},
@@ -568,7 +568,11 @@ class RegressionTests(unittest.TestCase):
         filtered = visible_markets(markets)
         self.assertEqual(
             {market["market_type"] for market in filtered},
-            {"home_win", "draw", "away_win", "under_3_5_goals"},
+            {"home_win", "draw", "away_win", "btts", "under_3_5_goals"},
+        )
+        self.assertEqual(
+            [market["market_type"] for market in filtered[:3]],
+            ["home_win", "draw", "away_win"],
         )
 
     def test_football_expanded_markets_include_double_chance_and_team_goals(self) -> None:
