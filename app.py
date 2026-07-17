@@ -1379,9 +1379,12 @@ def run_shadow_validation(
     simulations: int,
 ) -> None:
     """Load candidate validation only after a real analysis requests it."""
-    from machine_learning.shadow_validation import ShadowValidationService
+    try:
+        from machine_learning.shadow_validation import ShadowValidationService
 
-    ShadowValidationService().run(sport, selected_match, simulations)
+        ShadowValidationService().run(sport, selected_match, simulations)
+    except Exception as error:
+        logger.exception("Falló la validación en sombra de %s: %s", sport, error)
 
 
 def build_demo_markets_by_sport(
@@ -1942,17 +1945,30 @@ def sport_screen() -> None:
         disabled=not can_analyze,
         key="analyze_event",
     ):
+        reserved_usage = False
         try:
             usage_tracker.record_prediction(current_user["id"], sport)
-            run_analysis(
+            reserved_usage = True
+            analysis_completed = run_analysis(
                 home_team=home_team,
                 away_team=away_team,
                 simulations=simulations,
                 sport=sport,
                 selected_match=selected_match,
             )
+            if not analysis_completed:
+                usage_tracker.release_prediction(current_user["id"], sport)
+                reserved_usage = False
         except PermissionError:
             st.warning("Has alcanzado tu límite diario para este deporte")
+        except Exception as error:
+            logger.exception("Falló la ejecución protegida del análisis: %s", error)
+            if reserved_usage:
+                try:
+                    usage_tracker.release_prediction(current_user["id"], sport)
+                except Exception as release_error:
+                    logger.exception("No se pudo devolver el uso reservado: %s", release_error)
+            st.toast("No fue posible completar el análisis. Intenta nuevamente.", icon=":material/warning:")
 
 # =========================================================
 # ANÁLISIS
@@ -1964,7 +1980,7 @@ def run_analysis(
     simulations: int,
     sport: str,
     selected_match: dict[str, Any] | None = None,
-) -> None:
+) -> bool:
     logger.info("Análisis solicitado: %s vs %s | %s", home_team, away_team, sport)
 
     st.markdown("<div class='section-title'>Preparando tu análisis</div>", unsafe_allow_html=True)
@@ -2068,7 +2084,7 @@ def run_analysis(
 
             run_shadow_validation(sport, selected_match, simulations)
 
-            return
+            return bool(run_id)
 
         except FileNotFoundError:
             st.warning(
@@ -2203,7 +2219,7 @@ def run_analysis(
                 if run_id:
                     st.caption("Análisis guardado en tu historial.")
 
-                return
+                return bool(run_id)
 
             except Exception as error:
                 logger.exception("Falló el análisis base de fútbol: %s", error)
@@ -2289,15 +2305,23 @@ def run_analysis(
 
             run_shadow_validation(sport, selected_match, simulations)
 
-            return
+            return bool(run_id)
 
         except Exception as error:
             logger.exception("Falló el análisis real de %s: %s", sport, error)
             progress_bar.empty()
             status_text.empty()
             simulation_counter.empty()
-            st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
-            return
+            if sport not in {"Béisbol", "Basketball", "NFL"}:
+                st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
+                return False
+            st.warning(
+                "Los datos históricos especializados no están disponibles. "
+                "Mostramos una estimación estadística inicial con confianza limitada."
+            )
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            simulation_counter = st.empty()
 
     # ---------------- MODO INICIAL POR DEPORTE ----------------
     home_wins = 0
@@ -2407,6 +2431,8 @@ def run_analysis(
 
     if run_id:
         st.caption("Análisis guardado en tu historial.")
+
+    return bool(run_id)
 
 # =========================================================
 # INICIO

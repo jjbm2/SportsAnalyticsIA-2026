@@ -41,7 +41,10 @@ class BasketballPredictor:
         if not self.available or str(selected_match.get("league", "")).strip().upper() != "NBA":
             return self.engine.analyze_match(selected_match, simulations, force_refresh)
 
-        season = self._season(selected_match.get("date"))
+        season = self._history_season(
+            self._season(selected_match.get("date")),
+            self.metadata.get("test_season"),
+        )
         features = self.features.build_live_feature_row(
             selected_match["home_id"], selected_match["away_id"],
             season=season, league_id=12, force_refresh=force_refresh,
@@ -118,3 +121,15 @@ class BasketballPredictor:
         year = int(str(value)[:4])
         month = int(str(value)[5:7])
         return f"{year}-{year + 1}" if month >= 9 else f"{year - 1}-{year}"
+
+    @staticmethod
+    def _history_season(requested: str, validated: Any) -> str:
+        validated_season = str(validated or "").strip()
+        if not validated_season:
+            return requested
+        try:
+            requested_year = int(str(requested).split("-", 1)[0])
+            validated_year = int(validated_season.split("-", 1)[0])
+        except (TypeError, ValueError):
+            return validated_season
+        return requested if requested_year <= validated_year else validated_season

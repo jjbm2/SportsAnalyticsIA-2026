@@ -131,6 +131,15 @@ class SaaSFlowTests(unittest.TestCase):
         self.assertTrue(self.usage.can_user_predict(self.user["id"], "Basketball", day_one)["allowed"])
         self.assertTrue(self.usage.can_user_predict(self.user["id"], "Fútbol", day_two)["allowed"])
 
+    def test_failed_analysis_can_release_reserved_usage(self) -> None:
+        today = date(2026, 7, 16)
+        self.assertEqual(self.usage.record_prediction(self.user["id"], "Basketball", today), 1)
+        self.assertFalse(self.usage.can_user_predict(self.user["id"], "Basketball", today)["allowed"])
+        self.assertEqual(self.usage.release_prediction(self.user["id"], "Basketball", today), 0)
+        status = self.usage.can_user_predict(self.user["id"], "Basketball", today)
+        self.assertTrue(status["allowed"])
+        self.assertEqual(status["used"], 0)
+
     def test_opening_promotion_grants_five_daily_predictions_for_five_days(self) -> None:
         start = date(2026, 7, 16)
         status = self.promotions.redeem(self.user["id"], " apertura5 ", start)

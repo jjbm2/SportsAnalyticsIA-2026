@@ -81,6 +81,24 @@ class UsageTracker:
         finally:
             session.close()
 
+    def release_prediction(self, user_id: int, sport: str, on_date: date | None = None) -> int:
+        """Return a reserved prediction when no complete run was persisted."""
+        today = on_date or date.today()
+        session = self.session_factory()
+        try:
+            usage = self._usage_row(session, int(user_id), sport, today)
+            if usage is None or usage.predictions_count <= 0:
+                return 0
+            usage.predictions_count -= 1
+            remaining = usage.predictions_count
+            session.commit()
+            return remaining
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
     @staticmethod
     def _usage_row(session: Any, user_id: int, sport: str, on_date: date) -> UserUsage | None:
         return session.query(UserUsage).filter(

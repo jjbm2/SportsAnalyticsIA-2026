@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from core.logger import logger
 from services.hockey_api import HockeyAPI
 from services.mma_api import MMAAPI
 
@@ -53,18 +54,27 @@ def _result(
 
 class HockeyPredictionEngine:
     def __init__(self) -> None:
-        self.api_sports = HockeyAPI()
+        try:
+            self.api_sports = HockeyAPI()
+        except (ValueError, OSError) as error:
+            logger.warning("Datos especializados de hockey no disponibles: %s", error)
+            self.api_sports = None
 
     def analyze_match(self, selected_match: dict[str, Any], simulations: int, force_refresh: bool = False) -> dict[str, Any]:
         context = selected_match.get("analysis_context") or {}
         season = int(context.get("season") or str(selected_match.get("date"))[:4])
-        standings = self.api_sports.get(
-            "standings",
-            {"league": context.get("league_id"), "season": season},
-            cache_key=f"standings_{context.get('league_id')}_{season}",
-            force_refresh=force_refresh,
-            max_hours=12,
-        ).get("response", [])
+        standings = []
+        if self.api_sports is not None:
+            try:
+                standings = self.api_sports.get(
+                    "standings",
+                    {"league": context.get("league_id"), "season": season},
+                    cache_key=f"standings_{context.get('league_id')}_{season}",
+                    force_refresh=force_refresh,
+                    max_hours=12,
+                ).get("response", [])
+            except Exception as error:
+                logger.warning("Standings de hockey no disponibles: %s", error)
         home = self._api_sports_stats(standings, selected_match["home_id"])
         away = self._api_sports_stats(standings, selected_match["away_id"])
         home_pct = float(home.get("points_pct", 0.5))
@@ -72,7 +82,11 @@ class HockeyPredictionEngine:
         goal_edge = float(home.get("goal_differential", 0)) - float(away.get("goal_differential", 0))
         probability = _probability_from_difference((home_pct - away_pct) * 5 + goal_edge / 60)
         return _result(selected_match, simulations, probability, "NHL Season Form + Monte Carlo", {
-            "Rendimiento local": f"{home_pct * 100:.1f}%", "Rendimiento visitante": f"{away_pct * 100:.1f}%", "Diferencial de goles": f"{goal_edge:+.0f}"})
+            "Rendimiento local": f"{home_pct * 100:.1f}%",
+            "Rendimiento visitante": f"{away_pct * 100:.1f}%",
+            "Diferencial de goles": f"{goal_edge:+.0f}",
+            "Calidad de datos": "Limitada" if not standings else "Historial disponible",
+        })
 
     @classmethod
     def _api_sports_stats(cls, payload: Any, team_id: Any) -> dict[str, float]:
@@ -110,17 +124,25 @@ class MMAPredictionEngine:
         home = context.get("home_profile") or {}
         away = context.get("away_profile") or {}
         if selected_match.get("provider") == "api_sports":
-            api = MMAAPI()
-            home = self._merge_record(home, api.get_fighter_record(selected_match["home_id"], force_refresh))
-            away = self._merge_record(away, api.get_fighter_record(selected_match["away_id"], force_refresh))
+            try:
+                api = MMAAPI()
+                home = self._merge_record(home, api.get_fighter_record(selected_match["home_id"], force_refresh))
+                away = self._merge_record(away, api.get_fighter_record(selected_match["away_id"], force_refresh))
+            except Exception as error:
+                logger.warning("Récord especializado de MMA no disponible: %s", error)
         home_total = max(1, int(home.get("record_wins") or 0) + int(home.get("record_losses") or 0))
         away_total = max(1, int(away.get("record_wins") or 0) + int(away.get("record_losses") or 0))
         home_rate = int(home.get("record_wins") or 0) / home_total
         away_rate = int(away.get("record_wins") or 0) / away_total
         reach_edge = float(home.get("reach_inches") or 0) - float(away.get("reach_inches") or 0)
         probability = _probability_from_difference((home_rate - away_rate) * 5 + reach_edge / 20)
+        has_records = any(home.get(key) or away.get(key) for key in ("record_wins", "record_losses"))
         return _result(selected_match, simulations, probability, "MMA Record Profile + Monte Carlo", {
-            "Récord peleador 1": f"{home.get('record_wins', 0)}-{home.get('record_losses', 0)}", "Récord peleador 2": f"{away.get('record_wins', 0)}-{away.get('record_losses', 0)}", "División": str(context.get("weight_class") or "No disponible")})
+            "Récord peleador 1": f"{home.get('record_wins', 0)}-{home.get('record_losses', 0)}",
+            "Récord peleador 2": f"{away.get('record_wins', 0)}-{away.get('record_losses', 0)}",
+            "División": str(context.get("weight_class") or "No disponible"),
+            "Calidad de datos": "Historial disponible" if has_records else "Limitada",
+        })
 
     @staticmethod
     def _merge_record(profile: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:

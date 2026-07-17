@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from sklearn.metrics import roc_auc_score
 
 
 def market_model_is_qualified(
@@ -71,3 +72,44 @@ def expected_calibration_error(
             continue
         error += (float(mask.sum()) / total) * abs(float(y[mask].mean()) - float(p[mask].mean()))
     return float(error)
+
+
+def multiclass_probability_metrics(
+    target: Any,
+    probabilities: Any,
+    classes: Any,
+    *,
+    bins: int = 10,
+) -> dict[str, float]:
+    """Calculate macro AUC, multiclass Brier and confidence calibration."""
+    y = np.asarray(target)
+    p = np.asarray(probabilities, dtype=float)
+    labels = np.asarray(classes)
+    if p.ndim != 2 or y.size != p.shape[0] or p.shape[1] != labels.size:
+        raise ValueError("Las probabilidades multiclase no coinciden con target y clases.")
+    if y.size == 0 or labels.size < 2:
+        raise ValueError("Se requieren observaciones y al menos dos clases.")
+
+    p = np.clip(p, 0.0, 1.0)
+    totals = p.sum(axis=1, keepdims=True)
+    if np.any(totals <= 0):
+        raise ValueError("Cada observación debe tener probabilidad positiva.")
+    p = p / totals
+    expected = (y[:, None] == labels[None, :]).astype(float)
+    brier = float(np.mean(np.sum((p - expected) ** 2, axis=1)))
+
+    predicted_index = np.argmax(p, axis=1)
+    confidence = p[np.arange(y.size), predicted_index]
+    correctness = (labels[predicted_index] == y).astype(float)
+    calibration = expected_calibration_error(correctness, confidence, bins=bins)
+    try:
+        auc = float(roc_auc_score(
+            y, p, labels=labels, multi_class="ovr", average="macro"
+        ))
+    except ValueError:
+        auc = 0.0
+    return {
+        "roc_auc": auc,
+        "brier_score": brier,
+        "calibration_error": calibration,
+    }

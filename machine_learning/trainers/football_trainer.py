@@ -16,7 +16,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from database.training_runs_repository import TrainingRunsRepository
-from machine_learning.model_quality import expected_calibration_error
+from machine_learning.model_quality import expected_calibration_error, multiclass_probability_metrics
 from machine_learning.features.football_features import FootballFeatures
 from machine_learning.backtesting.walk_forward import WalkForwardBacktester
 
@@ -141,6 +141,22 @@ class FootballTrainer:
         metrics["over_accuracy_lift"] = metrics["over_accuracy"] - metrics["over_baseline_accuracy"]
         metrics["btts_accuracy_lift"] = metrics["btts_accuracy"] - metrics["btts_baseline_accuracy"]
 
+        result_prob = result_pipeline.predict_proba(X.loc[test_idx, market_features["result"]])
+        result_quality = multiclass_probability_metrics(
+            y_result_test,
+            result_prob,
+            result_pipeline.classes_,
+        )
+        metrics["result_auc"] = result_quality["roc_auc"]
+        metrics["result_brier_score"] = result_quality["brier_score"]
+        metrics["result_calibration_error"] = result_quality["calibration_error"]
+        metrics["result"] = {
+            **result_quality,
+            "accuracy": metrics["result_accuracy"],
+            "baseline_accuracy": metrics["result_baseline_accuracy"],
+            "accuracy_lift": metrics["result_accuracy_lift"],
+        }
+
         over_prob = over_model.predict_proba(X.loc[test_idx, market_features["over_2_5"]])[:, 1]
         btts_prob = btts_model.predict_proba(X.loc[test_idx, market_features["btts"]])[:, 1]
         metrics["over_brier_score"] = float(brier_score_loss(y_over_test, over_prob))
@@ -159,7 +175,7 @@ class FootballTrainer:
             metrics["btts_auc"] = 0.0
 
         qualified_markets = []
-        if metrics["result_accuracy_lift"] > 0:
+        if metrics["result_auc"] >= 0.52 and metrics["result_accuracy_lift"] > 0:
             qualified_markets.append("result")
         if metrics["over_auc"] >= 0.52 and metrics["over_accuracy_lift"] >= 0:
             qualified_markets.append("over_2_5")

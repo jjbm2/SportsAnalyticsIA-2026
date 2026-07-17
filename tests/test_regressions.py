@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ast
 import sqlite3
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -27,7 +29,11 @@ from machine_learning.model_registry import ModelRegistry
 from machine_learning.features.baseball_features import BaseballFeatures
 from machine_learning.features.elo_features import EloRatings
 from machine_learning.features.formula1_features import Formula1Features
-from machine_learning.model_quality import expected_calibration_error, validated_ml_weight
+from machine_learning.model_quality import (
+    expected_calibration_error,
+    multiclass_probability_metrics,
+    validated_ml_weight,
+)
 from machine_learning.calibration import FootballProbabilityCalibrator
 from machine_learning.shadow_validation import ShadowValidationService
 from machine_learning.continuous_learning import ContinuousLearningService
@@ -39,6 +45,8 @@ from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
 from services.http_client import TRANSIENT_STATUS_CODES, build_retry_session
 from services.base_sports_api import BaseSportsAPI, ProviderResponseError
+from machine_learning.predictors.baseball_predictor import BaseballPredictor
+from machine_learning.predictors.basketball_predictor import BasketballPredictor
 from services.provider_health import check_sports_connectivity
 from core.league_filters import filter_games_by_league_view
 from core.market_risk import apply_probability_risk, probability_risk_profile
@@ -76,6 +84,17 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_live_predictors_cap_history_to_validated_season(self) -> None:
+        self.assertEqual(BaseballPredictor._history_season(2026, 2024), 2024)
+        self.assertEqual(BaseballPredictor._history_season(2023, 2024), 2023)
+        self.assertEqual(
+            BasketballPredictor._history_season("2025-2026", "2024-2025"),
+            "2024-2025",
+        )
+        self.assertEqual(
+            BasketballPredictor._history_season("2023-2024", "2024-2025"),
+            "2023-2024",
+        )
     def test_event_cache_policy_keeps_today_fresh_and_future_weekly(self) -> None:
         today = date(2026, 7, 16)
         self.assertEqual(event_cache_hours(today, today=today), 0.25)
@@ -112,6 +131,33 @@ class RegressionTests(unittest.TestCase):
             with self.assertRaises(ProviderResponseError):
                 api.get("games", cache_key="unique", force_refresh=True)
             self.assertFalse(cache_file.exists())
+        finally:
+            cache_file.unlink(missing_ok=True)
+            cache_dir.rmdir()
+
+    def test_simultaneous_users_share_one_provider_request(self) -> None:
+        cache_dir = Path("data/test_concurrent_provider_cache")
+        cache_file = cache_dir / "games_shared.json"
+        cache_file.unlink(missing_ok=True)
+        with patch.dict("os.environ", {"API_SPORTS_KEY": "configured"}):
+            api = BaseSportsAPI("https://provider.invalid", "test")
+        api.cache_dir = cache_dir
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"errors": [], "response": [{"id": 1}]}
+
+        def delayed_response(*args, **kwargs):
+            del args, kwargs
+            time.sleep(0.1)
+            return response
+
+        api.http.get = Mock(side_effect=delayed_response)
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results = list(executor.map(lambda _: api.get("games", cache_key="shared"), range(2)))
+            self.assertEqual(api.http.get.call_count, 1)
+            self.assertEqual([item["response"] for item in results], [[{"id": 1}], [{"id": 1}]])
         finally:
             cache_file.unlink(missing_ok=True)
             cache_dir.rmdir()
@@ -749,6 +795,23 @@ class RegressionTests(unittest.TestCase):
 
     def test_calibration_error_is_zero_for_perfect_probabilities(self) -> None:
         self.assertEqual(expected_calibration_error([0, 1], [0.0, 1.0]), 0.0)
+
+    def test_multiclass_metrics_measure_auc_brier_and_calibration(self) -> None:
+        metrics = multiclass_probability_metrics(
+            [-1, 0, 1, -1, 0, 1],
+            [
+                [0.90, 0.05, 0.05],
+                [0.05, 0.90, 0.05],
+                [0.05, 0.05, 0.90],
+                [0.80, 0.10, 0.10],
+                [0.10, 0.80, 0.10],
+                [0.10, 0.10, 0.80],
+            ],
+            [-1, 0, 1],
+        )
+        self.assertAlmostEqual(metrics["roc_auc"], 1.0)
+        self.assertLess(metrics["brier_score"], 0.1)
+        self.assertLess(metrics["calibration_error"], 0.25)
 
     def test_automatic_promotion_requires_all_three_quality_metrics(self) -> None:
         complete = {

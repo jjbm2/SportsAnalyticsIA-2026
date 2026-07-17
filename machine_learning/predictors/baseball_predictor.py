@@ -51,7 +51,10 @@ class BaseballPredictor:
         if not self.models_available or not is_mlb:
             return self.engine.analyze_match(selected_match, simulations, force_refresh)
 
-        season = self.engine._infer_season(selected_match)
+        season = self._history_season(
+            self.engine._infer_season(selected_match),
+            self.metadata.get("test_season"),
+        )
         feature_df = self.features.build_live_feature_row(
             home_team_id=selected_match["home_id"],
             away_team_id=selected_match["away_id"],
@@ -172,3 +175,17 @@ class BaseballPredictor:
                 "top_scores": simulation["top_scores"],
             },
         }
+
+    @staticmethod
+    def _history_season(requested: Any, validated: Any) -> int | None:
+        try:
+            validated_year = int(validated)
+        except (TypeError, ValueError):
+            validated_year = None
+        try:
+            requested_year = int(requested)
+        except (TypeError, ValueError):
+            requested_year = None
+        if validated_year is None:
+            return requested_year
+        return min(requested_year, validated_year) if requested_year else validated_year
