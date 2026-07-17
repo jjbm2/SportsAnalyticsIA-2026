@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib
 import os
 import random
@@ -5,7 +7,6 @@ from html import escape
 from datetime import date, datetime
 from typing import Any, Callable
 
-import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -32,11 +33,7 @@ from database.model_metrics_repository import ModelMetricsRepository
 from database.post_match_review_repository import PostMatchReviewRepository
 from database.prediction_repository import PredictionRepository
 from database.seed import seed_sports
-from engines.football_prediction_engine import FootballPredictionEngine
 from services.api_manager import APIManager
-from machine_learning.predictors.football_predictor import FootballPredictor
-from machine_learning.continuous_learning import start_continuous_learning
-from machine_learning.shadow_validation import ShadowValidationService
 from services.post_match_service import PostMatchService
 from services.player_availability_service import PlayerAvailabilityService
 from auth.auth_manager import AuthManager
@@ -722,6 +719,8 @@ def render_history_section(
     limit: int = 10,
     sport_filter: str | None = None,
 ) -> None:
+    import pandas as pd
+
     st.markdown(
         f"<div class='section-title'>{title}</div>",
         unsafe_allow_html=True,
@@ -830,6 +829,8 @@ def render_recent_results(
     limit: int = 8,
     sport_filter: str | None = None,
 ) -> None:
+    import pandas as pd
+
     try:
         reviews = PostMatchReviewRepository().list_recent_reviews(
             limit=limit,
@@ -959,6 +960,8 @@ def _market_label(market_type: str) -> str:
 
 
 def render_performance_summary(sport_filter: str | None = None) -> None:
+    import pandas as pd
+
     try:
         summary = ModelMetricsRepository().get_performance_summary(sport_filter)
         if not summary:
@@ -1350,6 +1353,17 @@ def get_optional_engine_factory(sport: str) -> Callable | None:
         return None
 
 
+def run_shadow_validation(
+    sport: str,
+    selected_match: dict[str, Any] | None,
+    simulations: int,
+) -> None:
+    """Load candidate validation only after a real analysis requests it."""
+    from machine_learning.shadow_validation import ShadowValidationService
+
+    ShadowValidationService().run(sport, selected_match, simulations)
+
+
 def build_demo_markets_by_sport(
     sport: str,
     home_team: str,
@@ -1361,6 +1375,8 @@ def build_demo_markets_by_sport(
     under_probability: float,
     extra_probability: float,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    import pandas as pd
+
     if sport == "Fútbol":
         markets_df = pd.DataFrame(
             {
@@ -1946,6 +1962,8 @@ def run_analysis(
     # ---------------- FÚTBOL REAL ----------------
     if sport == "Fútbol" and selected_match and selected_match.get("home_id") and selected_match.get("away_id"):
         try:
+            from machine_learning.predictors.football_predictor import FootballPredictor
+
             status_text.write("15% - Preparando el modelo de análisis")
             progress_bar.progress(15)
 
@@ -2018,7 +2036,7 @@ def run_analysis(
             if run_id:
                 st.caption("Análisis guardado en tu historial.")
 
-            ShadowValidationService().run(sport, selected_match, simulations)
+            run_shadow_validation(sport, selected_match, simulations)
 
             return
 
@@ -2029,6 +2047,8 @@ def run_analysis(
             )
 
             try:
+                from engines.football_prediction_engine import FootballPredictionEngine
+
                 engine = FootballPredictionEngine()
 
                 status_text.write("35% - Revisando el historial de ambos equipos")
@@ -2237,7 +2257,7 @@ def run_analysis(
             if run_id:
                 st.caption("Análisis guardado en tu historial.")
 
-            ShadowValidationService().run(sport, selected_match, simulations)
+            run_shadow_validation(sport, selected_match, simulations)
 
             return
 
@@ -2421,11 +2441,22 @@ today_key = date.today().isoformat()
 if st.session_state.get("last_cache_cleanup") != today_key:
     reviewed_runs = PostMatchService().process_cached_results()
     deleted_cache_files = cleanup_expired_cache(max_age_days=7)
-    learning_started = start_continuous_learning()
+    learning_enabled = (os.getenv("ENABLE_CONTINUOUS_LEARNING") or "false").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    learning_started = False
+    if learning_enabled:
+        from machine_learning.continuous_learning import start_continuous_learning
+
+        learning_started = start_continuous_learning()
     st.session_state["last_cache_cleanup"] = today_key
     logger.info("Evaluaciones post-partido procesadas: %s", reviewed_runs)
     logger.info("Limpieza segura de caché completada: %s archivos", deleted_cache_files)
-    logger.info("Aprendizaje continuo en segundo plano iniciado: %s", learning_started)
+    logger.info(
+        "Aprendizaje continuo habilitado: %s | iniciado: %s",
+        learning_enabled,
+        learning_started,
+    )
 
 if st.session_state["screen"] == "account":
     render_account_screen(current_user, billing_manager, usage_tracker, SPORT_NAMES)

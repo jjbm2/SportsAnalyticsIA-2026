@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import sqlite3
 import unittest
 from pathlib import Path
@@ -71,6 +72,20 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_streamlit_entrypoint_defers_heavy_ml_imports(self) -> None:
+        tree = ast.parse(Path("app.py").read_text(encoding="utf-8"))
+        top_level_modules = set()
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                top_level_modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                top_level_modules.add(node.module)
+
+        self.assertNotIn("pandas", top_level_modules)
+        self.assertNotIn("machine_learning.predictors.football_predictor", top_level_modules)
+        self.assertNotIn("machine_learning.continuous_learning", top_level_modules)
+        self.assertNotIn("machine_learning.shadow_validation", top_level_modules)
+
     def test_http_retries_are_bounded_to_transient_get_failures(self) -> None:
         session = build_retry_session()
         retries = session.get_adapter("https://").max_retries

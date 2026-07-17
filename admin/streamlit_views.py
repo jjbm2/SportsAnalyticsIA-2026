@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pandas as pd
 import streamlit as st
 
 from admin.admin_service import AdminService
@@ -59,6 +58,8 @@ def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager
                 )
 
     with users_tab:
+        import pandas as pd
+
         st.caption(f"{len(users)} usuarios registrados en la base de datos actual.")
         st.dataframe(pd.DataFrame(users), hide_index=True, width="stretch")
         selected_label = st.selectbox("Usuario", list(user_options), key="admin_plan_user")
