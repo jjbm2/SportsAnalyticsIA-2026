@@ -19,6 +19,7 @@ from core.game_status import (
     extract_final_score,
     is_available_for_pregame,
     is_finished_status,
+    is_live_status,
 )
 from core.event_time import event_has_started, event_local_datetime, event_matches_local_date
 from core.league_filters import filter_games_by_league_view, is_primary_league
@@ -579,6 +580,23 @@ def format_event_schedule(match: dict[str, Any]) -> str:
         return raw_date
 
 
+def render_live_events(events: list[dict[str, Any]]) -> None:
+    if not events:
+        return
+    st.markdown("<div class='section-title'>En vivo</div>", unsafe_allow_html=True)
+    st.caption("Seguimiento informativo. El análisis previo no se recalcula durante el evento.")
+    for event in events:
+        home_score = event.get("home_score")
+        away_score = event.get("away_score")
+        score = "Marcador pendiente"
+        if home_score is not None and away_score is not None:
+            score = f"{home_score:g} – {away_score:g}"
+        with st.container(border=True):
+            st.badge("En vivo", color="red", icon=":material/sensors:")
+            st.markdown(f"**{event['home']} {score} {event['away']}**")
+            st.caption(f"{event['league']} · {event['status']}")
+
+
 # =========================================================
 # PERSISTENCIA
 # =========================================================
@@ -1121,6 +1139,7 @@ def normalize_game(
             "country": country,
             "status": status,
             "is_finished": is_finished_status(raw_status),
+            "is_live": is_live_status(raw_status),
             "is_available_for_pregame": is_available_for_pregame(raw_status),
             "home_score": None,
             "away_score": None,
@@ -1229,6 +1248,7 @@ def normalize_game(
         "country": country,
         "status": status,
         "is_finished": is_finished_status(raw_status),
+        "is_live": is_live_status(raw_status),
         "is_available_for_pregame": is_available_for_pregame(raw_status),
         "home_score": home_score,
         "away_score": away_score,
@@ -1751,6 +1771,7 @@ def sport_screen() -> None:
     if selected_competition_label != "Todas las competencias":
         selected_league = competitions_map[selected_competition_label]
 
+    live_games = [game for game in visible_sport_games if game.get("is_live")]
     games = [
         game
         for game in visible_sport_games
@@ -1758,6 +1779,11 @@ def sport_screen() -> None:
     ]
 
     if selected_league:
+        live_games = [
+            game for game in live_games
+            if game.get("league") == selected_league["league_name"]
+            and game.get("country", "") == selected_league["country"]
+        ]
         games = [
             game for game in games
             if game.get("league") == selected_league["league_name"]
@@ -1765,6 +1791,7 @@ def sport_screen() -> None:
         ]
 
     if search_text:
+        live_games = [game for game in live_games if search_text in game["label"].lower()]
         games = [game for game in games if search_text in game["label"].lower()]
 
     if sport == "Fútbol":
@@ -1783,6 +1810,7 @@ def sport_screen() -> None:
 
     st.session_state["match_options"] = games
 
+    render_live_events(live_games)
     st.markdown("<div class='section-title'>Partidos del día</div>", unsafe_allow_html=True)
 
     if sport_error:

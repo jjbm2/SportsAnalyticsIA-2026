@@ -5,7 +5,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from core.event_time import event_has_started, event_local_datetime, event_matches_local_date
-from core.game_status import is_available_for_pregame
+from core.game_status import is_available_for_pregame, is_live_status
 
 
 class EventTimeTests(unittest.TestCase):
@@ -20,6 +20,7 @@ class EventTimeTests(unittest.TestCase):
         event = {"date": "2026-07-16T18:00:00-06:00"}
         now = datetime(2026, 7, 16, 18, 1, tzinfo=ZoneInfo("America/Mexico_City"))
         self.assertTrue(event_has_started(event, now))
+        self.assertTrue(is_live_status({"short": "1H", "long": "First Half"}))
         self.assertFalse(is_available_for_pregame({"short": "1H", "long": "First Half"}))
 
     def test_future_event_remains_available(self) -> None:

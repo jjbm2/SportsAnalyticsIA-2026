@@ -15,18 +15,7 @@ FINISHED_STATUSES = {
     "AFTER OVERTIME",
 }
 
-UNAVAILABLE_STATUSES = FINISHED_STATUSES | {
-    "CANC",
-    "CANCELLED",
-    "CANCELED",
-    "POST",
-    "POSTPONED",
-    "SUSP",
-    "SUSPENDED",
-    "INT",
-    "INTERRUPTED",
-    "PST",
-    "ABD",
+LIVE_STATUSES = {
     "LIVE",
     "IN PLAY",
     "1H",
@@ -41,6 +30,20 @@ UNAVAILABLE_STATUSES = FINISHED_STATUSES | {
     "Q4",
     "OT",
     "IN PROGRESS",
+}
+
+UNAVAILABLE_STATUSES = FINISHED_STATUSES | LIVE_STATUSES | {
+    "CANC",
+    "CANCELLED",
+    "CANCELED",
+    "POST",
+    "POSTPONED",
+    "SUSP",
+    "SUSPENDED",
+    "INT",
+    "INTERRUPTED",
+    "PST",
+    "ABD",
 }
 
 
@@ -70,6 +73,16 @@ def is_finished_status(status: Any) -> bool:
         or "FINAL" in value
         or "FINISHED" in value
         or "COMPLETED" in value
+        for value in values
+    )
+
+
+def is_live_status(status: Any) -> bool:
+    values = status_values(status)
+    return any(
+        value in LIVE_STATUSES
+        or "IN PROGRESS" in value
+        or "IN PLAY" in value
         for value in values
     )
 
