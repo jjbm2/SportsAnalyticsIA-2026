@@ -5,7 +5,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-TRANSIENT_STATUS_CODES = (429, 500, 502, 503, 504)
+# A 429 is intentionally not retried here. Retrying it inside urllib3 can
+# create another burst; API-Sports traffic is paced centrally instead.
+TRANSIENT_STATUS_CODES = (500, 502, 503, 504)
 
 
 def build_retry_session() -> requests.Session:

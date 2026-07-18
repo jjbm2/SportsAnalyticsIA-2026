@@ -25,14 +25,14 @@ class FootballPredictionEngine:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         home_profile = self.data_service.build_team_profile(
             team_id=home_team_id,
-            last=10,
+            last=20,
             force_refresh=force_refresh,
             provider=provider,
         )
 
         away_profile = self.data_service.build_team_profile(
             team_id=away_team_id,
-            last=10,
+            last=20,
             force_refresh=force_refresh,
             provider=provider,
         )

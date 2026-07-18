@@ -22,6 +22,10 @@ class EventTimeTests(unittest.TestCase):
         self.assertTrue(event_has_started(event, now))
         self.assertTrue(is_live_status({"short": "1H", "long": "First Half"}))
         self.assertFalse(is_available_for_pregame({"short": "1H", "long": "First Half"}))
+        # Live is intentionally separate from pregame availability so the UI
+        # can offer historical analysis without treating the event as finished.
+        self.assertFalse(is_available_for_pregame({"short": "2H"}))
+        self.assertTrue(is_live_status({"short": "2H"}))
 
     def test_future_event_remains_available(self) -> None:
         event = {"date": "2026-07-16", "time": "20:00"}

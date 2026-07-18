@@ -1342,6 +1342,8 @@ def normalize_game(
         "game_id": game_id,
         "provider": game.get("provider", "api_sports"),
         "league": league,
+        "league_id": league_data.get("id"),
+        "season": league_data.get("season"),
         "country": country,
         "status": status,
         "is_finished": is_finished_status(raw_status),
@@ -1881,11 +1883,14 @@ def sport_screen() -> None:
         selected_league = competitions_map[selected_competition_label]
 
     live_games = [game for game in visible_sport_games if game.get("is_live")]
-    games = [
+    scheduled_games = [
         game
         for game in visible_sport_games
         if game.get("is_available_for_pregame", True) and not event_has_started(game)
     ]
+    # Live events remain analyzable; only completed/unavailable events are
+    # excluded. The result is still based on pre-match historical evidence.
+    games = live_games + [game for game in scheduled_games if game not in live_games]
 
     if selected_league:
         live_games = [
@@ -2125,11 +2130,24 @@ def run_analysis(
     if selected_match:
         selected_match = dict(selected_match)
         analysis_context = dict(selected_match.get("analysis_context") or {})
-        analysis_context["availability"] = PlayerAvailabilityService().get_match_availability(
-            sport=sport,
-            match={**selected_match, "sport": sport},
-            force_refresh=force_refresh,
-        )
+        if sport == "Fútbol":
+            # Injuries and lineups cost two additional provider calls and are
+            # not currently model inputs. Keep the analysis honest and within
+            # the free-plan request budget until those inputs affect a model.
+            analysis_context["availability"] = PlayerAvailabilityService._neutral(sport)
+        else:
+            analysis_context["availability"] = PlayerAvailabilityService().get_match_availability(
+                sport=sport,
+                match={**selected_match, "sport": sport},
+                force_refresh=force_refresh,
+            )
+        if selected_match.get("is_live"):
+            analysis_context["analysis_mode"] = "live_with_pregame_history"
+            analysis_context["live_score"] = {
+                "home": selected_match.get("home_score"),
+                "away": selected_match.get("away_score"),
+                "status": selected_match.get("status"),
+            }
         selected_match["analysis_context"] = analysis_context
 
     # ---------------- FÚTBOL REAL ----------------

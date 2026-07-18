@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from core.paths import CACHE_DIR
 from services.http_client import build_retry_session
+from services.api_sports_rate_limit import api_sports_rate_limiter
 
 load_dotenv()
 
@@ -37,6 +38,8 @@ def classify_provider_error(errors: Any) -> str:
     text = str(errors or "").lower()
     if "suspend" in text:
         return "account_suspended"
+    if "plan" in text or "subscription" in text or "season" in text:
+        return "plan_restriction"
     if any(token in text for token in ("rate", "limit", "quota", "request")):
         return "quota_exceeded"
     if any(token in text for token in ("access", "key", "token", "auth", "permission")):
@@ -149,12 +152,16 @@ class BaseSportsAPI:
                     return cached_data
 
             try:
+                if self.base_url.endswith("api-sports.io"):
+                    api_sports_rate_limiter.wait_for_slot()
                 response = self.http.get(
                     f"{self.base_url}/{endpoint.lstrip('/')}",
                     headers=self.headers,
                     params=params,
                     timeout=30
                 )
+                if self.base_url.endswith("api-sports.io"):
+                    api_sports_rate_limiter.observe(response.headers, response.status_code)
                 response.raise_for_status()
             except requests.RequestException:
                 stale_data = self._read_cache(cache_file=cache_file, max_hours=None)

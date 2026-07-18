@@ -42,6 +42,7 @@ from machine_learning.continuous_learning import ContinuousLearningService
 from machine_learning.probability_ensemble import ProbabilityEnsemble
 from machine_learning.backtesting import WalkForwardBacktester
 from services.football_api import FootballAPI
+from services.football_data_service import FootballDataService
 from services.player_availability_service import PlayerAvailabilityService
 from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
@@ -144,6 +145,40 @@ class RegressionTests(unittest.TestCase):
         )
         self.assertEqual(classify_provider_error({"rateLimit": "Exceeded"}), "quota_exceeded")
         self.assertEqual(classify_provider_error({"token": "Invalid"}), "credential_rejected")
+        self.assertEqual(
+            classify_provider_error({"plan": "Free plans do not have access to this season"}),
+            "plan_restriction",
+        )
+
+    def test_free_plan_history_uses_allowed_season_instead_of_last_parameter(self) -> None:
+        api = Mock()
+        api.get.return_value = {
+            "response": [
+                {
+                    "fixture": {"date": "2024-01-01", "status": {"short": "FT"}},
+                    "goals": {"home": 1, "away": 0},
+                },
+                {
+                    "fixture": {"date": "2024-02-01", "status": {"short": "FT"}},
+                    "goals": {"home": 2, "away": 1},
+                },
+                {
+                    "fixture": {"date": "2024-03-01", "status": {"short": "NS"}},
+                    "goals": {"home": None, "away": None},
+                },
+            ]
+        }
+        service = object.__new__(FootballDataService)
+        service.api = api
+        service.sportmonks_api = Mock()
+
+        with patch.dict("os.environ", {"API_FOOTBALL_HISTORY_SEASON": "2024"}):
+            fixtures = service.get_recent_team_fixtures(541, last=1)
+
+        params = api.get.call_args.kwargs["params"]
+        self.assertEqual(params, {"team": 541, "season": 2024})
+        self.assertNotIn("last", params)
+        self.assertEqual(fixtures[0]["fixture"]["date"], "2024-02-01")
 
     def test_simultaneous_users_share_one_provider_request(self) -> None:
         cache_dir = Path("data/test_concurrent_provider_cache")

@@ -1,4 +1,7 @@
+import os
 from typing import Any
+
+from core.game_status import is_finished_status
 
 from services.football_api import FootballAPI
 from services.sportmonks_football_api import SportmonksFootballAPI
@@ -23,18 +26,31 @@ class FootballDataService:
                 force_refresh=force_refresh,
             )
 
+        # API-Football free plans reject `last` and currently expose historical
+        # seasons only through 2024. Fetch the newest allowed season once and
+        # select the latest completed fixtures locally.
+        history_season = int(os.getenv("API_FOOTBALL_HISTORY_SEASON", "2024"))
         data = self.api.get(
             endpoint="fixtures",
             params={
                 "team": team_id,
-                "last": last,
+                "season": history_season,
             },
-            cache_key=f"team_{team_id}_last_{last}",
+            cache_key=f"team_{team_id}_season_{history_season}",
             force_refresh=force_refresh,
-            max_hours=12,
+            # A closed historical season is immutable in normal operation.
+            max_hours=24 * 30,
         )
-
-        return data.get("response", [])
+        fixtures = [
+            fixture for fixture in data.get("response", [])
+            if isinstance(fixture, dict)
+            and is_finished_status((fixture.get("fixture") or {}).get("status"))
+        ]
+        fixtures.sort(
+            key=lambda fixture: str((fixture.get("fixture") or {}).get("date") or ""),
+            reverse=True,
+        )
+        return fixtures[:last]
 
     def build_team_profile(
         self,

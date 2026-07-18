@@ -87,7 +87,8 @@ class SportmonksFootballAPI:
             while True:
                 response = self.http.get(
                     f"{self.base_url}/{path.lstrip('/')}",
-                    params={**params, "api_token": self.token, "per_page": 50, "page": page},
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    params={**params, "per_page": 50, "page": page},
                     timeout=30,
                 )
                 response.raise_for_status()
