@@ -105,7 +105,10 @@ class SportmonksFootballAPI:
             stale = self._read_cache(cache_file, None, allow_missing=True)
             if stale is not None:
                 return stale
-            raise
+            # Request exceptions include the complete URL. SportMonks accepts
+            # the token in the query string, so never propagate that text to
+            # application logs or the user interface.
+            raise RuntimeError("SportMonks provider request failed") from None
 
     @staticmethod
     def _read_cache(cache_file: Path, max_hours: int | None, allow_missing: bool = False) -> list[dict[str, Any]] | None:

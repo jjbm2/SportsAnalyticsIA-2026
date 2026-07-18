@@ -7,6 +7,7 @@ from database.database import get_session
 from database.models import PromotionRedemption, Subscription, User, UserUsage
 from promotions.promotion_service import OPENING_DAILY_LIMIT
 from core.plans import get_plan
+from core.time_utils import utc_now
 
 
 class UsageTracker:
@@ -113,11 +114,10 @@ class UsageTracker:
             return "full"
         if user.plan == "free":
             return "free"
-        from datetime import datetime
         active = session.query(Subscription).filter(
             Subscription.user_id == user.id,
             Subscription.active.is_(True),
-            Subscription.end_date > datetime.utcnow(),
+            Subscription.end_date > utc_now(),
         ).order_by(Subscription.end_date.desc()).first()
         return active.plan if active else "free"
 

@@ -26,6 +26,16 @@ def check_sports_connectivity(
             if provider_errors:
                 return _result(sport, "error", 0, "El proveedor rechazó la consulta")
             events = payload.get("response") or []
+            warnings = payload.get("_provider_warnings") or []
+            warning_reasons = {
+                str(item.get("reason")) for item in warnings if isinstance(item, dict)
+            }
+            if not events and "account_suspended" in warning_reasons:
+                return _result(sport, "error", 0, "La cuenta del proveedor está suspendida")
+            if not events and "quota_exceeded" in warning_reasons:
+                return _result(sport, "error", 0, "Límite de consultas alcanzado")
+            if not events and "credential_rejected" in warning_reasons:
+                return _result(sport, "error", 0, "Credencial rechazada o sin permisos")
             return _result(
                 sport,
                 "connected",
@@ -35,10 +45,13 @@ def check_sports_connectivity(
         except Exception as error:
             status_code = getattr(getattr(error, "response", None), "status_code", None)
             detail = "Proveedor temporalmente no disponible"
-            if status_code in {401, 403}:
-                detail = "Credencial rechazada o sin permisos"
-            elif status_code == 429:
+            reason = getattr(error, "reason", None)
+            if reason == "account_suspended":
+                detail = "La cuenta del proveedor está suspendida"
+            elif reason == "quota_exceeded" or status_code == 429:
                 detail = "Límite de consultas alcanzado"
+            elif reason == "credential_rejected" or status_code in {401, 403}:
+                detail = "Credencial rechazada o sin permisos"
             return _result(sport, "error", 0, detail)
 
     workers = max(1, min(4, len(sports)))

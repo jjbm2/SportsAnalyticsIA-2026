@@ -1,35 +1,64 @@
 # SportsAnalyticsAI
 
-Plataforma de análisis deportivo basada en datos, estadística avanzada, simulación e inteligencia artificial.
+Plataforma Streamlit de análisis deportivo con modelos validados, simulación estadística, historial persistente y evaluación post-partido.
 
-## Versión
+## Funciones principales
 
-v0.1.0 Foundation
+- Fútbol, béisbol, baloncesto, NFL, Fórmula 1, hockey y MMA.
+- Predictores especializados con fallback estadístico cuando el modelo ML no supera el control de calidad.
+- Probabilidades, confianza, riesgo y explicación por mercado.
+- Historial y evaluaciones post-partido en SQLite o PostgreSQL.
+- Registro, autenticación, planes, límites de uso y administración manual de pagos.
+- Caché compartido para evitar solicitudes duplicadas a los proveedores.
+- Backtesting temporal y aprendizaje continuo sujeto a reglas de promoción.
 
-## Objetivo
+## Configuración local
 
-Crear un sistema capaz de analizar partidos de fútbol, béisbol, basketball y NFL utilizando datos objetivos para generar probabilidades deportivas.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-## Tecnologías
+La aplicación queda disponible normalmente en `http://localhost:8501`.
 
-- Python
-- Streamlit
-- SQLite
-- Pandas
-- NumPy
-- SciPy
-- Scikit-learn
-- Matplotlib
-- Plotly
+## Variables de entorno
 
-## Estado actual
+Crea un archivo `.env` local. Nunca lo subas al repositorio.
 
-- Proyecto creado
-- Entorno virtual configurado
-- Git inicializado
-- Interfaz inicial creada
-- Core básico creado
+```env
+API_SPORTS_KEY=
+SPORTMONKS_API_TOKEN=
+BALLDONTLIE_API_KEY=
+DATABASE_URL=
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ENABLE_CONTINUOUS_LEARNING=false
+```
 
-## Próximo objetivo
+`DATABASE_URL` es opcional en local. Sin ella se utiliza SQLite; en producción se recomienda PostgreSQL persistente.
 
-Construir el Database Engine.
+## Validación
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m compileall -q app.py auth billing admin core database engines machine_learning promotions services usage
+.\.venv\Scripts\python.exe -m pip check
+```
+
+## Backtesting
+
+```powershell
+.\.venv\Scripts\python.exe scripts\run_backtest.py --help
+```
+
+El backtesting usa orden temporal y evita incorporar información posterior al partido analizado.
+
+## Seguridad y datos
+
+- Las contraseñas se almacenan con bcrypt.
+- Las claves de proveedores se leen únicamente del entorno.
+- Los comprobantes de pago se eliminan al aprobarse o rechazarse.
+- Los modelos activos no se sustituyen si el candidato no supera las métricas de promoción.
+- Los errores técnicos se registran internamente y no se muestran al usuario final.

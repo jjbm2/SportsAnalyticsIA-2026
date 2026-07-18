@@ -10,6 +10,7 @@ from database.database import get_session
 from database.models import PaymentRequest, Subscription, User
 from core.paths import DATA_DIR
 from core.plans import get_plan, plan_amount
+from core.time_utils import utc_now
 
 
 RECEIPT_DIR = DATA_DIR / "payment_receipts"
@@ -45,7 +46,7 @@ class BillingManager:
                 amount=amount,
                 status="pending",
                 proof_path=proof_path,
-                proof_uploaded_at=datetime.utcnow() if proof_path else None,
+                proof_uploaded_at=utc_now() if proof_path else None,
             )
             session.add(request)
             session.commit()
@@ -60,7 +61,7 @@ class BillingManager:
             session.close()
 
     def approve(self, request_id: int, admin_user_id: int, now: datetime | None = None) -> dict[str, Any]:
-        current = now or datetime.utcnow()
+        current = now or utc_now()
         session = self.session_factory()
         try:
             admin = session.get(User, int(admin_user_id))
@@ -109,7 +110,7 @@ class BillingManager:
             if request is None or request.status != "pending":
                 raise ValueError("La solicitud no está pendiente")
             request.status = "rejected"
-            request.reviewed_at = datetime.utcnow()
+            request.reviewed_at = utc_now()
             request.reviewed_by = admin.id
             self._delete_proof(request)
             session.commit()
@@ -152,7 +153,7 @@ class BillingManager:
             session.close()
 
     def active_subscription(self, user_id: int, now: datetime | None = None) -> dict[str, Any] | None:
-        current = now or datetime.utcnow()
+        current = now or utc_now()
         session = self.session_factory()
         try:
             item = session.query(Subscription).filter(

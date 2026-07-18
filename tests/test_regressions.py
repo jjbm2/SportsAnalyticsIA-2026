@@ -9,6 +9,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import requests
+
 from core.analysis_transparency import classify_analysis
 from core.constants import DEFAULT_SIMULATIONS, MIN_SIMULATIONS
 from core.game_status import extract_final_score, is_finished_status
@@ -44,7 +46,7 @@ from services.player_availability_service import PlayerAvailabilityService
 from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
 from services.http_client import TRANSIENT_STATUS_CODES, build_retry_session
-from services.base_sports_api import BaseSportsAPI, ProviderResponseError
+from services.base_sports_api import BaseSportsAPI, ProviderResponseError, classify_provider_error
 from machine_learning.predictors.baseball_predictor import BaseballPredictor
 from machine_learning.predictors.basketball_predictor import BasketballPredictor
 from services.provider_health import check_sports_connectivity
@@ -135,6 +137,14 @@ class RegressionTests(unittest.TestCase):
             cache_file.unlink(missing_ok=True)
             cache_dir.rmdir()
 
+    def test_provider_error_classification_is_safe_and_actionable(self) -> None:
+        self.assertEqual(
+            classify_provider_error({"access": "Your account is suspended"}),
+            "account_suspended",
+        )
+        self.assertEqual(classify_provider_error({"rateLimit": "Exceeded"}), "quota_exceeded")
+        self.assertEqual(classify_provider_error({"token": "Invalid"}), "credential_rejected")
+
     def test_simultaneous_users_share_one_provider_request(self) -> None:
         cache_dir = Path("data/test_concurrent_provider_cache")
         cache_file = cache_dir / "games_shared.json"
@@ -181,6 +191,21 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual([item["status"] for item in results], ["connected", "connected", "error"])
         self.assertEqual([item["events"] for item in results], [1, 0, 0])
         self.assertNotIn("secret", results[2]["detail"])
+
+    def test_provider_health_preserves_primary_suspension_with_empty_fallback(self) -> None:
+        manager = Mock()
+        manager.get_games_by_date.return_value = {
+            "response": [],
+            "_source": "sportmonks",
+            "_provider_warnings": [
+                {"provider": "api_sports", "reason": "account_suspended"}
+            ],
+        }
+        result = check_sports_connectivity(
+            ["Fútbol"], manager_factory=lambda sport: manager
+        )
+        self.assertEqual(result[0]["status"], "error")
+        self.assertIn("suspendida", result[0]["detail"])
 
     def test_streamlit_entrypoint_defers_heavy_ml_imports(self) -> None:
         tree = ast.parse(Path("app.py").read_text(encoding="utf-8"))
@@ -324,6 +349,21 @@ class RegressionTests(unittest.TestCase):
         )
         self.assertEqual(converted["goals"], {"home": 2, "away": 1})
         self.assertTrue(is_finished_status(converted["fixture"]["status"]))
+
+    def test_sportmonks_failure_never_exposes_token(self) -> None:
+        secret = "private-token-value"
+        api = SportmonksFootballAPI()
+        api.token = secret
+        api.cache_dir = Path("data/test_sportmonks_security")
+        api.http = Mock()
+        api.http.get.side_effect = requests.RequestException(
+            f"request failed: https://provider.test?api_token={secret}"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "provider request failed") as raised:
+            api.get_games_by_date("2099-01-01", force_refresh=True)
+
+        self.assertNotIn(secret, str(raised.exception))
 
     def test_nested_provider_status_is_detected_as_finished(self) -> None:
         status = {"state": {"short": "FT", "name": "Finished"}}

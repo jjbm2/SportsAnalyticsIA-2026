@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from core.time_utils import utc_now
 from pathlib import Path
 from typing import Any
 
@@ -16,12 +16,12 @@ class TrainingRunsRepository:
         sport: str,
         metadata: dict[str, Any],
     ) -> Path:
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
         output_path = self.base_dir / f"{sport.lower()}_training_{timestamp}.json"
 
         payload = {
             "sport": sport,
-            "saved_at": datetime.utcnow().isoformat(),
+            "saved_at": utc_now().isoformat(),
             "metadata": metadata,
         }
 

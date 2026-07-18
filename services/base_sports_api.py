@@ -27,6 +27,22 @@ def _cache_lock(cache_file: Path) -> Lock:
 class ProviderResponseError(RuntimeError):
     """Raised when a provider returns HTTP 200 with an application error."""
 
+    def __init__(self, message: str, *, reason: str = "provider_error") -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def classify_provider_error(errors: Any) -> str:
+    """Classify provider errors without propagating sensitive response text."""
+    text = str(errors or "").lower()
+    if "suspend" in text:
+        return "account_suspended"
+    if any(token in text for token in ("rate", "limit", "quota", "request")):
+        return "quota_exceeded"
+    if any(token in text for token in ("access", "key", "token", "auth", "permission")):
+        return "credential_rejected"
+    return "provider_error"
+
 
 class BaseSportsAPI:
     def __init__(self, base_url: str, sport_name: str, require_api_key: bool = True):
@@ -154,7 +170,8 @@ class BaseSportsAPI:
                     stale_data["_source"] = "stale_cache"
                     return stale_data
                 raise ProviderResponseError(
-                    f"{self.sport_name} provider rejected the request"
+                    f"{self.sport_name} provider rejected the request",
+                    reason=classify_provider_error(data.get("errors")),
                 )
             data["_source"] = "api"
 

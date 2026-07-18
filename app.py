@@ -436,8 +436,48 @@ st.markdown(
                 border-radius: 17px;
             }
 
+            .sport-card {
+                padding: 17px;
+                margin-bottom: 0.8rem;
+            }
+
+            .sport-logo {
+                font-size: 2.6rem;
+                margin-bottom: 0.25rem;
+            }
+
+            .sport-name {
+                font-size: 1.75rem;
+            }
+
+            .sport-date {
+                margin-top: 0.2rem;
+            }
+
             .metric-card {
-                min-height: 110px;
+                min-height: 88px;
+                padding: 12px 14px;
+                margin-bottom: 0.35rem;
+            }
+
+            .metric-title {
+                font-size: 0.86rem;
+            }
+
+            .metric-value {
+                font-size: 1.7rem;
+                margin-top: 0.2rem;
+            }
+
+            .market-card {
+                min-height: 0;
+                padding: 12px 14px;
+                margin-bottom: 0.5rem;
+            }
+
+            .section-title {
+                margin-top: 1.25rem;
+                margin-bottom: 0.6rem;
             }
 
             .game-card {
@@ -515,6 +555,52 @@ def init_state() -> None:
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+@st.cache_resource(show_spinner=False)
+def initialize_application_services() -> tuple[AuthManager, UsageTracker, BillingManager, AdminService]:
+    """Initialize process-wide infrastructure once instead of on every rerun."""
+    create_database()
+    seed_sports()
+
+    auth_manager = AuthManager()
+    try:
+        auth_manager.ensure_admin_from_environment(
+            os.getenv("ADMIN_EMAIL"),
+            os.getenv("ADMIN_PASSWORD"),
+        )
+    except ValueError as error:
+        logger.error("No se pudo inicializar el administrador configurado: %s", error)
+    return auth_manager, UsageTracker(), BillingManager(), AdminService()
+
+
+@st.cache_resource(show_spinner=False, max_entries=3)
+def run_daily_maintenance(day_key: str) -> dict[str, Any]:
+    """Run safe shared maintenance once per process and calendar day."""
+    reviewed_runs = PostMatchService().process_cached_results()
+    deleted_cache_files = cleanup_expired_cache(max_age_days=14)
+    learning_enabled = (os.getenv("ENABLE_CONTINUOUS_LEARNING") or "false").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    learning_started = False
+    if learning_enabled:
+        from machine_learning.continuous_learning import start_continuous_learning
+
+        learning_started = start_continuous_learning()
+
+    logger.info("Mantenimiento diario %s completado", day_key)
+    logger.info("Evaluaciones post-partido procesadas: %s", reviewed_runs)
+    logger.info("Limpieza segura de caché completada: %s archivos", deleted_cache_files)
+    logger.info(
+        "Aprendizaje continuo habilitado: %s | iniciado: %s",
+        learning_enabled,
+        learning_started,
+    )
+    return {
+        "reviewed_runs": reviewed_runs,
+        "deleted_cache_files": deleted_cache_files,
+        "learning_started": learning_started,
+    }
 
 
 def reset_game_results() -> None:
@@ -2493,21 +2579,8 @@ with initial_loading.container():
 
 initialization_failed = False
 try:
-    create_database()
-    seed_sports()
     init_state()
-
-    auth_manager = AuthManager()
-    usage_tracker = UsageTracker()
-    billing_manager = BillingManager()
-    admin_service = AdminService()
-    try:
-        auth_manager.ensure_admin_from_environment(
-            os.getenv("ADMIN_EMAIL"),
-            os.getenv("ADMIN_PASSWORD"),
-        )
-    except ValueError as error:
-        logger.error("No se pudo inicializar el administrador configurado: %s", error)
+    auth_manager, usage_tracker, billing_manager, admin_service = initialize_application_services()
 except Exception as error:
     initialization_failed = True
     logger.exception("No se pudo inicializar la aplicación: %s", error)
@@ -2551,24 +2624,8 @@ render_account_navigation(current_user)
 
 today_key = date.today().isoformat()
 if st.session_state.get("last_cache_cleanup") != today_key:
-    reviewed_runs = PostMatchService().process_cached_results()
-    deleted_cache_files = cleanup_expired_cache(max_age_days=14)
-    learning_enabled = (os.getenv("ENABLE_CONTINUOUS_LEARNING") or "false").strip().lower() in {
-        "1", "true", "yes", "on",
-    }
-    learning_started = False
-    if learning_enabled:
-        from machine_learning.continuous_learning import start_continuous_learning
-
-        learning_started = start_continuous_learning()
+    run_daily_maintenance(today_key)
     st.session_state["last_cache_cleanup"] = today_key
-    logger.info("Evaluaciones post-partido procesadas: %s", reviewed_runs)
-    logger.info("Limpieza segura de caché completada: %s archivos", deleted_cache_files)
-    logger.info(
-        "Aprendizaje continuo habilitado: %s | iniciado: %s",
-        learning_enabled,
-        learning_started,
-    )
 
 if st.session_state["screen"] == "account":
     render_account_screen(current_user, billing_manager, usage_tracker, SPORT_NAMES)

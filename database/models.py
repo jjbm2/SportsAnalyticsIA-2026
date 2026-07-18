@@ -1,4 +1,4 @@
-from datetime import datetime
+from core.time_utils import utc_now
 
 from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -24,7 +24,7 @@ class Competition(Base):
     country = Column(String, nullable=True)
     season = Column(String, nullable=True)
     api_id = Column(String, nullable=True)
-    last_update = Column(DateTime, default=datetime.utcnow)
+    last_update = Column(DateTime, default=utc_now)
 
     sport = relationship("Sport", back_populates="competitions")
     teams = relationship("Team", back_populates="competition")
@@ -73,7 +73,7 @@ class PredictionRun(Base):
     simulations = Column(Integer, nullable=False)
     status = Column(String, default="completed")
     context_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     markets = relationship(
         "PredictionMarket",
@@ -119,7 +119,7 @@ class PostMatchReview(Base):
     mean_absolute_error = Column(Float, nullable=True)
     mean_brier_score = Column(Float, nullable=True)
     details_json = Column(JSON, nullable=True)
-    evaluated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    evaluated_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class ModelErrorAnalysis(Base):
@@ -147,7 +147,7 @@ class ModelErrorAnalysis(Base):
     brier_score = Column(Float, nullable=False)
     correct = Column(Boolean, nullable=False, index=True)
     pattern_tags = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class User(Base):
@@ -158,7 +158,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     plan = Column(String, nullable=False, default="free")
     is_admin = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class UserUsage(Base):
@@ -186,7 +186,7 @@ class PromotionRedemption(Base):
     code = Column(String, nullable=False, index=True)
     activated_on = Column(Date, nullable=False)
     ends_on = Column(Date, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class PaymentRequest(Base):
@@ -201,7 +201,7 @@ class PaymentRequest(Base):
     receipt_path = Column(String, nullable=True)
     proof_path = Column(String, nullable=True)
     proof_uploaded_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 

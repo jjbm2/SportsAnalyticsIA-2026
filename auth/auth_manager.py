@@ -6,6 +6,7 @@ from typing import Any, Callable
 from sqlalchemy.exc import IntegrityError
 
 from auth.password_utils import hash_password, verify_password
+from core.time_utils import utc_now
 from database.database import get_session
 from database.models import Subscription, User
 
@@ -49,7 +50,6 @@ class AuthManager:
             session.close()
 
     def get_user(self, user_id: int) -> dict[str, Any] | None:
-        from datetime import datetime
         session = self.session_factory()
         try:
             user = session.get(User, int(user_id))
@@ -57,7 +57,7 @@ class AuthManager:
                 active = session.query(Subscription).filter(
                     Subscription.user_id == user.id,
                     Subscription.active.is_(True),
-                    Subscription.end_date > datetime.utcnow(),
+                    Subscription.end_date > utc_now(),
                 ).first()
                 if active is None:
                     user.plan = "free"

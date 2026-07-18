@@ -62,7 +62,15 @@ class FootballAPI(BaseSportsAPI):
             )
         except Exception as error:
             primary_error = error
-            primary = {"response": [], "results": 0, "_source": "unavailable"}
+            primary = {
+                "response": [],
+                "results": 0,
+                "_source": "unavailable",
+                "_provider_warnings": [{
+                    "provider": "api_sports",
+                    "reason": getattr(error, "reason", "provider_error"),
+                }],
+            }
             logger.warning("Proveedor principal de fútbol no disponible: %s", error)
 
         if not self.supplemental_api.available:
@@ -83,7 +91,10 @@ class FootballAPI(BaseSportsAPI):
             primary["results"] = len(primary_games)
             primary["_source"] = "sportmonks" if primary_error is not None else "combined"
         except Exception as error:
-            logger.warning("Proveedor complementario de fútbol no disponible: %s", error)
+            logger.warning(
+                "Proveedor complementario de fútbol no disponible (%s)",
+                type(error).__name__,
+            )
             if primary_error is not None:
                 raise primary_error
 

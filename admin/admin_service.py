@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Callable
 
 from database.database import get_session
 from database.models import PaymentRequest, Subscription, User, UserUsage
 from core.plans import get_plan
+from core.time_utils import utc_now
 
 
 class AdminService:
@@ -62,7 +63,7 @@ class AdminService:
                 Subscription.user_id == user.id, Subscription.active.is_(True)
             ).update({Subscription.active: False}, synchronize_session=False)
             if plan != "free":
-                now = datetime.utcnow()
+                now = utc_now()
                 session.add(Subscription(
                     user_id=user.id,
                     plan=plan,

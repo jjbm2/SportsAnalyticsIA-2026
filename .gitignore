@@ -5,4 +5,4 @@ __pycache__/
 logs/
 data/
 machine_learning/models_store/versions/
-.streamlit/
+.streamlit/secrets.toml
