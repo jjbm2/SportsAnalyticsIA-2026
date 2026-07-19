@@ -125,6 +125,12 @@ class BaseballPredictionEngine:
 
         home_lambda, away_lambda = self.calculate_expected_runs(home_profile, away_profile)
         result = self.run_monte_carlo(home_lambda, away_lambda, simulations)
+        decisive_total = result["home_win_probability"] + result["away_win_probability"]
+        if decisive_total:
+            result["home_win_probability"] = (
+                result["home_win_probability"] / decisive_total * 100
+            )
+            result["away_win_probability"] = 100 - result["home_win_probability"]
 
         markets_df = pd.DataFrame(
             {
@@ -162,7 +168,6 @@ class BaseballPredictionEngine:
             "model_name": "Runs Model + Monte Carlo",
             "summary_cards": [
                 {"label": f"Victoria {home_team}", "value": f"{result['home_win_probability']:.1f}%"},
-                {"label": "Empate técnico", "value": f"{result['draw_probability']:.1f}%"},
                 {"label": f"Victoria {away_team}", "value": f"{result['away_win_probability']:.1f}%"},
             ],
             "extra_metrics": {
@@ -170,6 +175,7 @@ class BaseballPredictionEngine:
                 "Carreras esperadas visitante": f"{away_lambda:.2f}",
                 "Simulaciones": f"{simulations:,}",
                 "Modelo": "Runs + Monte Carlo",
+                "Historial usado": f"Temporada {home_profile.get('history_season', season)}",
             },
             "markets": markets_df.to_dict(orient="records"),
             "markets_to_save": markets_to_save,
@@ -179,5 +185,6 @@ class BaseballPredictionEngine:
                 "home_lambda": home_lambda,
                 "away_lambda": away_lambda,
                 "top_scores": result["top_scores"],
+                "history_is_stale": bool(home_profile.get("history_is_stale") or away_profile.get("history_is_stale")),
             },
         }

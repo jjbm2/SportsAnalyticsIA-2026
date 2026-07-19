@@ -60,6 +60,54 @@ class FootballPredictionEngine:
         return home_lambda, away_lambda
 
     @staticmethod
+    def calculate_limited_expected_goals(
+        home_profile: dict[str, Any],
+        away_profile: dict[str, Any],
+        minimum_matches: int = 3,
+    ) -> tuple[float, float]:
+        """Build conservative lambdas without inventing a home advantage.
+
+        Sparse observations are shrunk toward a neutral scoring prior. Venue
+        adjustments only grow when both teams have enough real observations.
+        """
+        prior = 1.10
+
+        def stabilized(profile: dict[str, Any], key: str) -> float:
+            played = max(0, int(profile.get("played") or 0))
+            evidence = min(1.0, played / max(1, minimum_matches))
+            observed = float(profile.get(key, prior) or prior)
+            return prior * (1.0 - evidence) + observed * evidence
+
+        home_scored = stabilized(home_profile, "avg_scored")
+        home_conceded = stabilized(home_profile, "avg_conceded")
+        away_scored = stabilized(away_profile, "avg_scored")
+        away_conceded = stabilized(away_profile, "avg_conceded")
+        joint_evidence = min(
+            1.0,
+            min(
+                int(home_profile.get("played") or 0),
+                int(away_profile.get("played") or 0),
+            ) / max(1, minimum_matches),
+        )
+        home_factor = 1.0 + 0.10 * joint_evidence
+        away_factor = 1.0 - 0.05 * joint_evidence
+        return (
+            max(0.2, ((home_scored * home_factor) + away_conceded) / 2),
+            max(0.2, ((away_scored * away_factor) + home_conceded) / 2),
+        )
+
+    @staticmethod
+    def profiles_are_limited(
+        home_profile: dict[str, Any],
+        away_profile: dict[str, Any],
+        minimum_matches: int = 3,
+    ) -> bool:
+        return min(
+            int(home_profile.get("played") or 0),
+            int(away_profile.get("played") or 0),
+        ) < minimum_matches
+
+    @staticmethod
     def validate_team_profiles(
         home_profile: dict[str, Any],
         away_profile: dict[str, Any],

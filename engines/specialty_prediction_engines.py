@@ -8,6 +8,7 @@ import numpy as np
 from core.logger import logger
 from services.hockey_api import HockeyAPI
 from services.mma_api import MMAAPI
+from services.historical_season import accessible_history_season
 
 
 def _probability_from_difference(difference: float, scale: float = 1.0) -> float:
@@ -62,7 +63,8 @@ class HockeyPredictionEngine:
 
     def analyze_match(self, selected_match: dict[str, Any], simulations: int, force_refresh: bool = False) -> dict[str, Any]:
         context = selected_match.get("analysis_context") or {}
-        season = int(context.get("season") or str(selected_match.get("date"))[:4])
+        requested_season = int(context.get("season") or str(selected_match.get("date"))[:4])
+        season = accessible_history_season("hockey", requested_season)
         standings = []
         if self.api_sports is not None:
             try:
@@ -86,6 +88,7 @@ class HockeyPredictionEngine:
             "Rendimiento visitante": f"{away_pct * 100:.1f}%",
             "Diferencial de goles": f"{goal_edge:+.0f}",
             "Calidad de datos": "Limitada" if not standings else "Historial disponible",
+            "Historial usado": f"Temporada {season}",
         })
 
     @classmethod

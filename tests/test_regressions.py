@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import sqlite3
 import time
 import unittest
@@ -47,6 +48,7 @@ from services.player_availability_service import PlayerAvailabilityService
 from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
 from services.sportsdata_soccer_api import SportsDataSoccerAPI
+from services.historical_season import accessible_history_season
 from services.http_client import TRANSIENT_STATUS_CODES, build_retry_session
 from services.base_sports_api import BaseSportsAPI, ProviderResponseError, classify_provider_error
 from machine_learning.predictors.baseball_predictor import BaseballPredictor
@@ -88,6 +90,32 @@ class _Formula1Results:
 
 
 class RegressionTests(unittest.TestCase):
+    def test_free_plan_history_uses_latest_accessible_season(self) -> None:
+        with patch.dict(os.environ, {"API_SPORTS_HISTORY_SEASON": "2024"}, clear=False):
+            self.assertEqual(accessible_history_season("baseball", 2026), 2024)
+            self.assertEqual(accessible_history_season("basketball", "2025-2026"), 2024)
+            self.assertEqual(accessible_history_season("nfl", 2023), 2023)
+
+    def test_limited_football_profiles_do_not_invent_home_advantage(self) -> None:
+        neutral = {"played": 0, "avg_scored": 1.0, "avg_conceded": 1.0}
+        home_lambda, away_lambda = FootballPredictionEngine.calculate_limited_expected_goals(
+            neutral,
+            neutral,
+        )
+        self.assertAlmostEqual(home_lambda, away_lambda)
+        self.assertTrue(FootballPredictionEngine.profiles_are_limited(neutral, neutral))
+
+    def test_sport_specific_history_season_overrides_global_value(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "API_SPORTS_HISTORY_SEASON": "2024",
+                "API_BASEBALL_HISTORY_SEASON": "2025",
+            },
+            clear=False,
+        ):
+            self.assertEqual(accessible_history_season("baseball", 2026), 2025)
+
     def test_live_predictors_cap_history_to_validated_season(self) -> None:
         self.assertEqual(BaseballPredictor._history_season(2026, 2024), 2024)
         self.assertEqual(BaseballPredictor._history_season(2023, 2024), 2023)

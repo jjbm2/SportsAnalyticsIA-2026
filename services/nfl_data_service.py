@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from services.nfl_api import NFLAPI
+from services.historical_season import accessible_history_season
 
 
 FINAL_STATUSES = {
@@ -91,17 +92,17 @@ class NFLDataService:
         last: int = 10,
         force_refresh: bool = False,
     ) -> list[dict[str, Any]]:
+        history_season = accessible_history_season("nfl", season)
         params: dict[str, Any] = {"team": team_id}
 
-        if season is not None:
-            params["season"] = season
+        params["season"] = history_season
         if league_id is not None:
             params["league"] = league_id
 
         data = self.api.get(
             endpoint="games",
             params=params,
-            cache_key=f"team_{team_id}_season_{season}_league_{league_id}_last_{last}",
+            cache_key=f"team_{team_id}_season_{history_season}_league_{league_id}_last_{last}",
             force_refresh=force_refresh,
             max_hours=12,
         )
@@ -133,6 +134,7 @@ class NFLDataService:
             last=last,
             force_refresh=force_refresh,
         )
+        history_season = accessible_history_season("nfl", season)
 
         played = 0
         points_for = 0.0
@@ -180,6 +182,8 @@ class NFLDataService:
                 "win_rate": 0.5,
                 "avg_total": 45.0,
                 "score_std": 8.0,
+                "history_season": history_season,
+                "history_is_stale": history_season != self._season_year(season),
             }
 
         mean_score = points_for / played
@@ -194,4 +198,13 @@ class NFLDataService:
             "win_rate": wins / played,
             "avg_total": sum(totals) / played,
             "score_std": score_std if score_std > 0 else 8.0,
+            "history_season": history_season,
+            "history_is_stale": history_season != self._season_year(season),
         }
+
+    @staticmethod
+    def _season_year(season: Any) -> int:
+        try:
+            return int(str(season).split("-", 1)[0])
+        except (TypeError, ValueError):
+            return datetime.now().year

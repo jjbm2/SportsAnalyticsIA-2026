@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from services.baseball_api import BaseballAPI
+from services.historical_season import accessible_history_season
 
 
 FINAL_STATUSES = {
@@ -104,10 +105,10 @@ class BaseballDataService:
         last: int = 12,
         force_refresh: bool = False,
     ) -> list[dict[str, Any]]:
+        history_season = accessible_history_season("baseball", season)
         params: dict[str, Any] = {"team": team_id}
 
-        if season is not None:
-            params["season"] = season
+        params["season"] = history_season
 
         if league_id is not None:
             params["league"] = league_id
@@ -115,7 +116,7 @@ class BaseballDataService:
         data = self.api.get(
             endpoint="games",
             params=params,
-            cache_key=f"team_{team_id}_season_{season}_league_{league_id}_last_{last}",
+            cache_key=f"team_{team_id}_season_{history_season}_league_{league_id}_last_{last}",
             force_refresh=force_refresh,
             max_hours=12,
         )
@@ -141,6 +142,7 @@ class BaseballDataService:
             last=last,
             force_refresh=force_refresh,
         )
+        history_season = accessible_history_season("baseball", season)
 
         played = 0
         runs_for = 0.0
@@ -188,6 +190,8 @@ class BaseballDataService:
                 "win_rate": 0.5,
                 "avg_total": 9.0,
                 "score_std": 1.8,
+                "history_season": history_season,
+                "history_is_stale": history_season != self._season_year(season),
             }
 
         mean_score = runs_for / played
@@ -202,4 +206,13 @@ class BaseballDataService:
             "win_rate": wins / played,
             "avg_total": sum(total_scores) / played,
             "score_std": score_std if score_std > 0 else 1.8,
+            "history_season": history_season,
+            "history_is_stale": history_season != self._season_year(season),
         }
+
+    @staticmethod
+    def _season_year(season: Any) -> int:
+        try:
+            return int(str(season).split("-", 1)[0])
+        except (TypeError, ValueError):
+            return datetime.now().year

@@ -2254,15 +2254,22 @@ def run_analysis(
                     provider=selected_match.get("provider", "api_sports"),
                     competition=selected_match.get("league_id"),
                 )
-                engine.validate_team_profiles(home_profile, away_profile)
+                limited_history = engine.profiles_are_limited(home_profile, away_profile)
 
                 status_text.write("60% - Comparando ataque, defensa y forma reciente")
                 progress_bar.progress(60)
 
-                home_lambda, away_lambda = engine.calculate_expected_goals(
-                    home_profile=home_profile,
-                    away_profile=away_profile,
-                )
+                if limited_history:
+                    home_lambda, away_lambda = engine.calculate_limited_expected_goals(
+                        home_profile=home_profile,
+                        away_profile=away_profile,
+                    )
+                else:
+                    engine.validate_team_profiles(home_profile, away_profile)
+                    home_lambda, away_lambda = engine.calculate_expected_goals(
+                        home_profile=home_profile,
+                        away_profile=away_profile,
+                    )
 
                 status_text.write("80% - Evaluando escenarios y probabilidades")
                 progress_bar.progress(80)
@@ -2278,10 +2285,21 @@ def run_analysis(
                 simulation_counter.write("La evaluación terminó correctamente.")
 
                 st.success("Análisis completado")
-                st.markdown(
-                    ":blue-badge[Modelo estadístico] "
-                    ":small[Utiliza Poisson y simulación; no se presenta como IA entrenada.]"
-                )
+                if limited_history:
+                    st.warning(
+                        "Pronóstico orientativo: esta liga o uno de sus equipos no tiene "
+                        "historial suficiente. La estimación tiene confianza baja y no es "
+                        "100% confiable."
+                    )
+                    st.markdown(
+                        ":orange-badge[Estimación limitada] "
+                        ":small[Utiliza referencias conservadoras y simulación; no se presenta como IA entrenada.]"
+                    )
+                else:
+                    st.markdown(
+                        ":blue-badge[Modelo estadístico] "
+                        ":small[Utiliza Poisson y simulación; no se presenta como IA entrenada.]"
+                    )
 
                 st.markdown("<div class='section-title'>Resumen principal</div>", unsafe_allow_html=True)
                 result_choices = [
@@ -2339,6 +2357,23 @@ def run_analysis(
                 )
                 game_style = classify_game_style(fallback_features, match_quality)
                 apply_game_style_to_markets(markets_to_save, game_style)
+                if limited_history:
+                    limited_warning = (
+                        "Confianza limitada por falta de historial suficiente en esta liga o equipo."
+                    )
+                    for market in markets_to_save:
+                        market["confidence_score"] = min(
+                            25.0, float(market.get("confidence_score") or 0.0)
+                        )
+                        market["confidence"] = "Baja"
+                        market["risk"] = "Alto"
+                        market["explanation"] = limited_warning
+                        extra = dict(market.get("extra_data_json") or {})
+                        extra.update({
+                            "limited_history": True,
+                            "warning": limited_warning,
+                        })
+                        market["extra_data_json"] = extra
                 remember_match_quality(selected_match, match_quality)
                 render_match_quality(match_quality)
                 render_game_style(game_style)
@@ -2348,7 +2383,10 @@ def run_analysis(
                     sport=sport,
                     home_team=home_team,
                     away_team=away_team,
-                    model_name="Poisson + Monte Carlo",
+                    model_name=(
+                        "Estimación limitada + Poisson + Monte Carlo"
+                        if limited_history else "Poisson + Monte Carlo"
+                    ),
                     simulations=simulations,
                     markets=markets_to_save,
                     selected_match=selected_match,
@@ -2363,6 +2401,7 @@ def run_analysis(
                         "recommended_result": {"selection": likely_result, "probability": likely_probability},
                         "match_quality": match_quality,
                         "game_style": game_style,
+                        "limited_history": limited_history,
                     },
                 )
 

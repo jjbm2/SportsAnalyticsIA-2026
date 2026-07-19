@@ -181,6 +181,7 @@ class BasketballPredictionEngine:
                 "Puntos esperados visitante": f"{away_expected:.1f}",
                 "Simulaciones": f"{simulations:,}",
                 "Modelo": "Pace + Monte Carlo",
+                "Historial usado": f"Temporada {home_profile.get('history_season', season)}",
             },
             "markets": markets_df.to_dict(orient="records"),
             "markets_to_save": markets_to_save,
@@ -190,5 +191,6 @@ class BasketballPredictionEngine:
                 "home_expected": home_expected,
                 "away_expected": away_expected,
                 "top_scores": result["top_scores"],
+                "history_is_stale": bool(home_profile.get("history_is_stale") or away_profile.get("history_is_stale")),
             },
         }
