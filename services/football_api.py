@@ -53,65 +53,86 @@ class FootballAPI(BaseSportsAPI):
             params["season"] = season
             cache_key += f"_season_{season}"
 
-        primary_error: Exception | None = None
-        try:
-            primary = self.get(
-                endpoint="fixtures",
-                params=params,
-                cache_key=cache_key,
-                force_refresh=force_refresh,
-                max_hours=event_cache_hours(date)
-            )
-        except Exception as error:
-            primary_error = error
-            primary = {
-                "response": [],
-                "results": 0,
-                "_source": "unavailable",
-                "_provider_warnings": [{
-                    "provider": "api_sports",
-                    "reason": getattr(error, "reason", "provider_error"),
-                }],
-            }
-            logger.warning("Proveedor principal de fútbol no disponible: %s", error)
+        # Provider priority: SportsDataIO, API-Sports, then SportMonks. Missing
+        # credentials simply remove that provider from the chain.
+        games: list[dict] = []
+        successful_providers: list[str] = []
+        provider_warnings: list[dict[str, str]] = []
 
-        primary_games = [item for item in primary.get("response", []) if isinstance(item, dict)]
-        providers = (
-            ("sportmonks", self.supplemental_api),
-            ("sportsdataio", self.sportsdata_api),
-        )
-        successful_supplements: list[str] = []
-        for provider_name, provider in providers:
-            if not provider.available:
-                continue
+        if self.sportsdata_api.available:
             try:
-                supplemental = provider.get_games_by_date(
+                provider_games = self.sportsdata_api.get_games_by_date(
                     fixture_date=date,
                     force_refresh=force_refresh,
                 )
-                for candidate in supplemental:
-                    if not any(self._same_fixture(candidate, existing) for existing in primary_games):
-                        primary_games.append(candidate)
-                successful_supplements.append(provider_name)
+                for candidate in provider_games:
+                    if not any(self._same_fixture(candidate, existing) for existing in games):
+                        games.append(candidate)
+                successful_providers.append("sportsdataio")
             except Exception as error:
                 logger.warning(
-                    "Proveedor complementario %s no disponible (%s)",
-                    provider_name,
+                    "Proveedor de fútbol %s no disponible (%s)",
+                    "sportsdataio",
                     type(error).__name__,
                 )
+                provider_warnings.append({
+                    "provider": "sportsdataio",
+                    "reason": "provider_error",
+                })
 
-        if primary_error is not None and not primary_games:
-            raise primary_error
-        primary["response"] = primary_games
-        primary["results"] = len(primary_games)
-        if successful_supplements:
-            primary["_source"] = (
-                successful_supplements[0]
-                if primary_error is not None
-                else "combined"
-            )
+        if self.api_key:
+            try:
+                api_sports = self.get(
+                    endpoint="fixtures",
+                    params=params,
+                    cache_key=cache_key,
+                    force_refresh=force_refresh,
+                    max_hours=event_cache_hours(date),
+                )
+                for candidate in api_sports.get("response", []):
+                    if isinstance(candidate, dict) and not any(
+                        self._same_fixture(candidate, existing) for existing in games
+                    ):
+                        games.append(candidate)
+                successful_providers.append("api_sports")
+            except Exception as error:
+                logger.warning("API-Sports de fútbol no disponible (%s)", type(error).__name__)
+                provider_warnings.append({
+                    "provider": "api_sports",
+                    "reason": getattr(error, "reason", "provider_error"),
+                })
 
-        return primary
+        if self.supplemental_api.available:
+            try:
+                provider_games = self.supplemental_api.get_games_by_date(
+                    fixture_date=date,
+                    force_refresh=force_refresh,
+                )
+                for candidate in provider_games:
+                    if not any(self._same_fixture(candidate, existing) for existing in games):
+                        games.append(candidate)
+                successful_providers.append("sportmonks")
+            except Exception as error:
+                logger.warning(
+                    "Proveedor de fútbol sportmonks no disponible (%s)",
+                    type(error).__name__,
+                )
+                provider_warnings.append({
+                    "provider": "sportmonks",
+                    "reason": "provider_error",
+                })
+
+        source = (
+            "combined" if len(successful_providers) > 1
+            else successful_providers[0] if successful_providers
+            else "unavailable"
+        )
+        return {
+            "response": games,
+            "results": len(games),
+            "_source": source,
+            "_provider_warnings": provider_warnings,
+        }
 
     @classmethod
     def _same_fixture(cls, first: dict, second: dict) -> bool:

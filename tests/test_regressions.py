@@ -327,36 +327,39 @@ class RegressionTests(unittest.TestCase):
             cache_file.unlink(missing_ok=True)
             api.cache_dir.rmdir()
 
-    def test_football_merges_sportsdataio_as_a_supplement(self) -> None:
+    def test_provider_order_is_sportsdata_then_api_sports(self) -> None:
         with patch.dict("os.environ", {"API_SPORTS_KEY": "configured"}):
             api = FootballAPI()
-        primary = {
-            "response": [{
-                "fixture": {"id": 1, "date": "2026-07-18T10:00:00"},
-                "teams": {
-                    "home": {"name": "A"},
-                    "away": {"name": "B"},
-                },
-            }],
-            "results": 1,
-            "_source": "api",
-        }
-        api.get = Mock(return_value=primary)
+        call_order = []
+        api.get = Mock(side_effect=lambda **_: (
+            call_order.append("api_sports") or {
+                "response": [{
+                    "fixture": {"id": 1, "date": "2026-07-18T10:00:00"},
+                    "teams": {
+                        "home": {"name": "A"},
+                        "away": {"name": "B"},
+                    },
+                }]
+            }
+        ))
         api.supplemental_api = Mock(available=False)
         api.sportsdata_api = Mock(available=True)
-        api.sportsdata_api.get_games_by_date.return_value = [{
-            "provider": "sportsdataio",
-            "fixture": {"id": "sportsdata:2", "date": "2026-07-18T12:00:00"},
-            "teams": {
-                "home": {"name": "C"},
-                "away": {"name": "D"},
-            },
-        }]
+        api.sportsdata_api.get_games_by_date.side_effect = lambda **_: (
+            call_order.append("sportsdataio") or [{
+                "provider": "sportsdataio",
+                "fixture": {"id": "sportsdata:2", "date": "2026-07-18T12:00:00"},
+                "teams": {
+                    "home": {"name": "C"},
+                    "away": {"name": "D"},
+                },
+            }]
+        )
 
         result = api.get_games_by_date("2026-07-18")
 
         self.assertEqual(result["results"], 2)
         self.assertEqual(result["_source"], "combined")
+        self.assertEqual(call_order, ["sportsdataio", "api_sports"])
 
     def test_confidence_uses_history_consistency_agreement_and_quality(self) -> None:
         markets = [{
@@ -549,6 +552,7 @@ class RegressionTests(unittest.TestCase):
     def test_football_uses_supplemental_provider_when_primary_fails(self) -> None:
         api = FootballAPI()
         api.get = Mock(side_effect=ConnectionError("primary unavailable"))
+        api.sportsdata_api = Mock(available=False)
         api.supplemental_api = Mock()
         api.supplemental_api.available = True
         api.supplemental_api.get_games_by_date.return_value = [
