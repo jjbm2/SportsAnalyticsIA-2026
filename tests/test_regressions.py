@@ -344,6 +344,8 @@ class RegressionTests(unittest.TestCase):
         ))
         api.supplemental_api = Mock(available=False)
         api.sportsdata_api = Mock(available=True)
+        api._read_cache = Mock(return_value=None)
+        api._save_cache = Mock()
         api.sportsdata_api.get_games_by_date.side_effect = lambda **_: (
             call_order.append("sportsdataio") or [{
                 "provider": "sportsdataio",
@@ -360,6 +362,34 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result["results"], 2)
         self.assertEqual(result["_source"], "combined")
         self.assertEqual(call_order, ["sportsdataio", "api_sports"])
+
+    def test_combined_cache_is_used_before_api_sports(self) -> None:
+        with patch.dict("os.environ", {"API_SPORTS_KEY": "configured"}):
+            api = FootballAPI()
+        call_order = []
+        api.sportsdata_api = Mock(available=True)
+        api.sportsdata_api.get_games_by_date.side_effect = lambda **_: (
+            call_order.append("sportsdataio") or []
+        )
+        api._read_cache = Mock(return_value={
+            "response": [{
+                "fixture": {"id": 7, "date": "2026-07-18T12:00:00"},
+                "teams": {
+                    "home": {"name": "Cache A"},
+                    "away": {"name": "Cache B"},
+                },
+            }]
+        })
+        api.get = Mock(side_effect=AssertionError("API-Sports must not be called"))
+        api.supplemental_api = Mock(available=True)
+
+        result = api.get_games_by_date("2026-07-18")
+
+        self.assertEqual(result["results"], 1)
+        self.assertEqual(result["_source"], "combined_cache")
+        self.assertEqual(call_order, ["sportsdataio"])
+        api.get.assert_not_called()
+        api.supplemental_api.get_games_by_date.assert_not_called()
 
     def test_confidence_uses_history_consistency_agreement_and_quality(self) -> None:
         markets = [{
@@ -553,6 +583,8 @@ class RegressionTests(unittest.TestCase):
         api = FootballAPI()
         api.get = Mock(side_effect=ConnectionError("primary unavailable"))
         api.sportsdata_api = Mock(available=False)
+        api._read_cache = Mock(return_value=None)
+        api._save_cache = Mock()
         api.supplemental_api = Mock()
         api.supplemental_api.available = True
         api.supplemental_api.get_games_by_date.return_value = [

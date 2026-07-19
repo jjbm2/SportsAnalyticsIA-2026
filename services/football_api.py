@@ -53,11 +53,12 @@ class FootballAPI(BaseSportsAPI):
             params["season"] = season
             cache_key += f"_season_{season}"
 
-        # Provider priority: SportsDataIO, API-Sports, then SportMonks. Missing
-        # credentials simply remove that provider from the chain.
+        # Provider priority: SportsDataIO, shared combined cache, API-Sports,
+        # then SportMonks. Missing credentials remove that provider safely.
         games: list[dict] = []
         successful_providers: list[str] = []
         provider_warnings: list[dict[str, str]] = []
+        combined_cache_file = self._cache_path("fixtures_combined", cache_key)
 
         if self.sportsdata_api.available:
             try:
@@ -79,6 +80,24 @@ class FootballAPI(BaseSportsAPI):
                     "provider": "sportsdataio",
                     "reason": "provider_error",
                 })
+
+        if not force_refresh:
+            combined_cache = self._read_cache(
+                combined_cache_file,
+                event_cache_hours(date),
+            )
+            if combined_cache is not None:
+                for candidate in combined_cache.get("response", []):
+                    if isinstance(candidate, dict) and not any(
+                        self._same_fixture(candidate, existing) for existing in games
+                    ):
+                        games.append(candidate)
+                return {
+                    "response": games,
+                    "results": len(games),
+                    "_source": "combined_cache",
+                    "_provider_warnings": provider_warnings,
+                }
 
         if self.api_key:
             try:
@@ -127,12 +146,15 @@ class FootballAPI(BaseSportsAPI):
             else successful_providers[0] if successful_providers
             else "unavailable"
         )
-        return {
+        result = {
             "response": games,
             "results": len(games),
             "_source": source,
             "_provider_warnings": provider_warnings,
         }
+        if games:
+            self._save_cache(combined_cache_file, result)
+        return result
 
     @classmethod
     def _same_fixture(cls, first: dict, second: dict) -> bool:
