@@ -68,6 +68,23 @@ class SaaSFlowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.auth.register("long@example.com", "A1" + ("ñ" * 36))
 
+    def test_registration_rejects_fake_disposable_and_malformed_emails(self) -> None:
+        invalid_emails = (
+            "test@test.com",
+            "fake@gmail.com",
+            "real@mailinator.com",
+            "double..dot@gmail.com",
+            ".leading@gmail.com",
+            "missing-domain@",
+        )
+        for email in invalid_emails:
+            with self.subTest(email=email), self.assertRaises(ValueError):
+                self.auth.register(email, "ValidPass123")
+
+    def test_registration_accepts_normal_and_plus_alias_emails(self) -> None:
+        user = self.auth.register("persona+promo@gmail.com", "ValidPass123")
+        self.assertEqual(user["email"], "persona+promo@gmail.com")
+
     def test_login_attempts_are_temporarily_limited_per_session(self) -> None:
         state = {}
         for attempt in range(4):

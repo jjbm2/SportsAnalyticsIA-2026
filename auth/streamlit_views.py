@@ -56,6 +56,7 @@ def render_auth_screen(auth: AuthManager) -> None:
     if mode == "Crear cuenta":
         with st.form("register_form"):
             email = st.text_input("Correo electrónico", autocomplete="email")
+            st.caption("Usa un correo real. No se aceptan direcciones de prueba o temporales.")
             password = st.text_input(
                 "Contraseña", type="password", autocomplete="new-password", max_chars=72
             )

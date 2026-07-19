@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Callable
 
 from sqlalchemy.exc import IntegrityError
 
 from auth.password_utils import hash_password, verify_password
+from auth.email_validation import normalize_email, validate_registration_email
 from core.time_utils import utc_now
 from database.database import get_session
 from database.models import Subscription, User
-
-
-EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 class AuthManager:
@@ -19,7 +16,7 @@ class AuthManager:
         self.session_factory = session_factory
 
     def register(self, email: str, password: str, *, is_admin: bool = False) -> dict[str, Any]:
-        normalized = self.normalize_email(email)
+        normalized = validate_registration_email(email)
         user = User(
             email=normalized,
             password_hash=hash_password(password),
@@ -84,10 +81,7 @@ class AuthManager:
 
     @staticmethod
     def normalize_email(email: str) -> str:
-        normalized = str(email).strip().lower()
-        if len(normalized) > 254 or not EMAIL_PATTERN.fullmatch(normalized):
-            raise ValueError("Correo electrónico no válido")
-        return normalized
+        return normalize_email(email)
 
     @staticmethod
     def _public_user(user: User) -> dict[str, Any]:
