@@ -2454,12 +2454,43 @@ def run_analysis(
 
         except Exception as error:
             logger.exception("Falló el análisis real de %s: %s", sport, error)
-            progress_bar.empty()
-            status_text.empty()
-            simulation_counter.empty()
-            st.toast("Análisis no disponible. Intenta nuevamente.", icon=":material/warning:")
-            st.info("No hay suficiente historial real para publicar una predicción confiable.")
-            return False
+            from core.limited_prediction import build_limited_prediction
+
+            result = build_limited_prediction(sport, home_team, away_team, simulations)
+            progress_bar.progress(100)
+            status_text.write("100% - Estimación orientativa completada")
+            simulation_counter.write("Se utilizó una referencia conservadora por falta de historial.")
+
+            st.warning(result["warning"])
+            render_analysis_method(result)
+            render_prediction_insight(result)
+
+            st.markdown("<div class='section-title'>Resumen orientativo</div>", unsafe_allow_html=True)
+            summary_columns = st.columns(len(result["summary_cards"]))
+            for column, card in zip(summary_columns, result["summary_cards"]):
+                with column:
+                    st.markdown(
+                        f'''<div class="metric-card">
+                            <div class="metric-title">{card["label"]}</div>
+                            <div class="metric-value">{card["value"]}</div>
+                        </div>''',
+                        unsafe_allow_html=True,
+                    )
+
+            render_strong_markets(result["markets_to_save"])
+            run_id = save_prediction_to_db(
+                sport=sport,
+                home_team=home_team,
+                away_team=away_team,
+                model_name=result["model_name"],
+                simulations=simulations,
+                markets=result["markets_to_save"],
+                selected_match=selected_match,
+                context_json=result["context_json"],
+            )
+            if run_id:
+                st.caption("Estimación orientativa guardada en tu historial.")
+            return bool(run_id)
 
     # La simulación genérica ya no se publica: sin datos reales no hay predicción.
     st.info("Este evento todavía no cuenta con datos históricos suficientes para un análisis confiable.")
