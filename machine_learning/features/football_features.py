@@ -172,18 +172,21 @@ class FootballFeatures:
         away_team_id: int,
         force_refresh: bool = False,
         provider: str = "api_sports",
+        competition: str | int | None = None,
     ) -> pd.DataFrame:
         home_profile = self.data_service.build_team_profile(
             team_id=home_team_id,
             last=20,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
         away_profile = self.data_service.build_team_profile(
             team_id=away_team_id,
             last=20,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
 
         home_fixtures = self.data_service.get_recent_team_fixtures(
@@ -191,12 +194,14 @@ class FootballFeatures:
             last=20,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
         away_fixtures = self.data_service.get_recent_team_fixtures(
             team_id=away_team_id,
             last=20,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
 
         home_form = self.summarize_recent_form(

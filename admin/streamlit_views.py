@@ -53,6 +53,11 @@ def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager
                     border=True,
                 )
                 st.metric(
+                    "SportsDataIO",
+                    "Configurada" if health["sportsdataio"] else "Pendiente",
+                    border=True,
+                )
+                st.metric(
                     "BallDontLie",
                     "Configurada" if health["balldontlie"] else "Pendiente",
                     border=True,

@@ -31,11 +31,18 @@ Crea un archivo `.env` local. Nunca lo subas al repositorio.
 API_SPORTS_KEY=
 SPORTMONKS_API_TOKEN=
 BALLDONTLIE_API_KEY=
+SPORTSDATA_API_KEY=
+SPORTSDATA_SOCCER_COMPETITIONS=3
 DATABASE_URL=
 ADMIN_EMAIL=
 ADMIN_PASSWORD=
 ENABLE_CONTINUOUS_LEARNING=false
 ```
+
+`SPORTSDATA_SOCCER_COMPETITIONS` acepta identificadores o claves separados por
+coma (por ejemplo `3,EPL,MLS`). La prueba gratuita de SportsDataIO ofrece la
+Champions League (`3`); configura únicamente competiciones incluidas en tu
+suscripción para no desperdiciar solicitudes.
 
 `DATABASE_URL` es opcional en local. Sin ella se utiliza SQLite; en producción se recomienda PostgreSQL persistente.
 

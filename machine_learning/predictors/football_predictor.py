@@ -53,12 +53,14 @@ class FootballPredictor:
         simulations: int = 10000,
         force_refresh: bool = False,
         provider: str = "api_sports",
+        competition: str | int | None = None,
     ) -> dict[str, Any]:
         features_df = self.features_builder.build_live_feature_row(
             home_team_id=home_team_id,
             away_team_id=away_team_id,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
 
         X = features_df[self.feature_columns]
@@ -114,6 +116,7 @@ class FootballPredictor:
             away_team_id=away_team_id,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
         self.poisson_engine.validate_team_profiles(home_profile, away_profile)
 

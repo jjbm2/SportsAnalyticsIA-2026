@@ -24,6 +24,7 @@ def deployment_health() -> dict[str, Any]:
         "database_backend": backend,
         "api_sports": bool((os.getenv("API_SPORTS_KEY") or "").strip()),
         "sportmonks": bool((os.getenv("SPORTMONKS_API_TOKEN") or "").strip()),
+        "sportsdataio": bool((os.getenv("SPORTSDATA_API_KEY") or "").strip()),
         "balldontlie": bool(
             (os.getenv("BALLDONTLIE_API_KEY") or os.getenv("BALL_DONT_LIE_API_KEY") or "").strip()
         ),

@@ -2174,6 +2174,7 @@ def run_analysis(
                 simulations=simulations,
                 force_refresh=force_refresh,
                 provider=selected_match.get("provider", "api_sports"),
+                competition=selected_match.get("league_id"),
             )
             remember_match_quality(selected_match, result)
 
@@ -2251,6 +2252,7 @@ def run_analysis(
                     away_team_id=selected_match["away_id"],
                     force_refresh=force_refresh,
                     provider=selected_match.get("provider", "api_sports"),
+                    competition=selected_match.get("league_id"),
                 )
                 engine.validate_team_profiles(home_profile, away_profile)
 

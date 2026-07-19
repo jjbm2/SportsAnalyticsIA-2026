@@ -46,6 +46,7 @@ from services.football_data_service import FootballDataService
 from services.player_availability_service import PlayerAvailabilityService
 from services.post_match_service import PostMatchService
 from services.sportmonks_football_api import SportmonksFootballAPI
+from services.sportsdata_soccer_api import SportsDataSoccerAPI
 from services.http_client import TRANSIENT_STATUS_CODES, build_retry_session
 from services.base_sports_api import BaseSportsAPI, ProviderResponseError, classify_provider_error
 from machine_learning.predictors.baseball_predictor import BaseballPredictor
@@ -283,6 +284,79 @@ class RegressionTests(unittest.TestCase):
 
         self.assertFalse(api.api_key)
         self.assertTrue(api.supplemental_api.available)
+
+    def test_sportsdataio_maps_games_without_exposing_its_key(self) -> None:
+        secret = "sportsdata-private-key"
+        with patch.dict(
+            "os.environ",
+            {
+                "SPORTSDATA_API_KEY": secret,
+                "SPORTSDATA_SOCCER_COMPETITIONS": "3",
+            },
+        ):
+            api = SportsDataSoccerAPI()
+        api.cache_dir = Path("data/test_sportsdata_cache")
+        api.cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = api.cache_dir / "games_3_2099-01-01.json"
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = [{
+            "GameId": 99,
+            "DateTime": "2099-01-01T18:00:00",
+            "Status": "Scheduled",
+            "CompetitionName": "Champions League",
+            "HomeTeamId": 10,
+            "HomeTeamName": "Local",
+            "AwayTeamId": 20,
+            "AwayTeamName": "Visitante",
+            "HomeTeamScore": None,
+            "AwayTeamScore": None,
+        }]
+        api.http.get = Mock(return_value=response)
+        try:
+            games = api.get_games_by_date("2099-01-01", force_refresh=True)
+            call = api.http.get.call_args
+            self.assertEqual(
+                call.kwargs["headers"],
+                {"Ocp-Apim-Subscription-Key": secret},
+            )
+            self.assertNotIn(secret, call.args[0])
+            self.assertEqual(games[0]["provider"], "sportsdataio")
+            self.assertEqual(games[0]["teams"]["away"]["name"], "Visitante")
+        finally:
+            cache_file.unlink(missing_ok=True)
+            api.cache_dir.rmdir()
+
+    def test_football_merges_sportsdataio_as_a_supplement(self) -> None:
+        with patch.dict("os.environ", {"API_SPORTS_KEY": "configured"}):
+            api = FootballAPI()
+        primary = {
+            "response": [{
+                "fixture": {"id": 1, "date": "2026-07-18T10:00:00"},
+                "teams": {
+                    "home": {"name": "A"},
+                    "away": {"name": "B"},
+                },
+            }],
+            "results": 1,
+            "_source": "api",
+        }
+        api.get = Mock(return_value=primary)
+        api.supplemental_api = Mock(available=False)
+        api.sportsdata_api = Mock(available=True)
+        api.sportsdata_api.get_games_by_date.return_value = [{
+            "provider": "sportsdataio",
+            "fixture": {"id": "sportsdata:2", "date": "2026-07-18T12:00:00"},
+            "teams": {
+                "home": {"name": "C"},
+                "away": {"name": "D"},
+            },
+        }]
+
+        result = api.get_games_by_date("2026-07-18")
+
+        self.assertEqual(result["results"], 2)
+        self.assertEqual(result["_source"], "combined")
 
     def test_confidence_uses_history_consistency_agreement_and_quality(self) -> None:
         markets = [{

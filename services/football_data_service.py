@@ -5,12 +5,14 @@ from core.game_status import is_finished_status
 
 from services.football_api import FootballAPI
 from services.sportmonks_football_api import SportmonksFootballAPI
+from services.sportsdata_soccer_api import SportsDataSoccerAPI
 
 
 class FootballDataService:
     def __init__(self):
         self.api = FootballAPI()
         self.sportmonks_api = SportmonksFootballAPI()
+        self.sportsdata_api = SportsDataSoccerAPI()
 
     def get_recent_team_fixtures(
         self,
@@ -18,10 +20,18 @@ class FootballDataService:
         last: int = 10,
         force_refresh: bool = False,
         provider: str = "api_sports",
+        competition: str | int | None = None,
     ) -> list[dict[str, Any]]:
         if provider == "sportmonks":
             return self.sportmonks_api.get_recent_team_fixtures(
                 team_id=team_id,
+                last=last,
+                force_refresh=force_refresh,
+            )
+        if provider == "sportsdataio":
+            return self.sportsdata_api.get_recent_team_fixtures(
+                team_id=team_id,
+                competition=competition,
                 last=last,
                 force_refresh=force_refresh,
             )
@@ -58,12 +68,14 @@ class FootballDataService:
         last: int = 10,
         force_refresh: bool = False,
         provider: str = "api_sports",
+        competition: str | int | None = None,
     ) -> dict[str, Any]:
         fixtures = self.get_recent_team_fixtures(
             team_id=team_id,
             last=last,
             force_refresh=force_refresh,
             provider=provider,
+            competition=competition,
         )
 
         played = 0

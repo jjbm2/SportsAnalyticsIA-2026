@@ -7,6 +7,7 @@ from core.event_time import sports_timezone
 from core.event_cache_policy import event_cache_hours
 from services.base_sports_api import BaseSportsAPI
 from services.sportmonks_football_api import SportmonksFootballAPI
+from services.sportsdata_soccer_api import SportsDataSoccerAPI
 
 
 class FootballAPI(BaseSportsAPI):
@@ -17,6 +18,7 @@ class FootballAPI(BaseSportsAPI):
             require_api_key=False,
         )
         self.supplemental_api = SportmonksFootballAPI()
+        self.sportsdata_api = SportsDataSoccerAPI()
 
     def get_leagues(
         self,
@@ -73,30 +75,41 @@ class FootballAPI(BaseSportsAPI):
             }
             logger.warning("Proveedor principal de fútbol no disponible: %s", error)
 
-        if not self.supplemental_api.available:
-            if primary_error is not None:
-                raise primary_error
-            return primary
+        primary_games = [item for item in primary.get("response", []) if isinstance(item, dict)]
+        providers = (
+            ("sportmonks", self.supplemental_api),
+            ("sportsdataio", self.sportsdata_api),
+        )
+        successful_supplements: list[str] = []
+        for provider_name, provider in providers:
+            if not provider.available:
+                continue
+            try:
+                supplemental = provider.get_games_by_date(
+                    fixture_date=date,
+                    force_refresh=force_refresh,
+                )
+                for candidate in supplemental:
+                    if not any(self._same_fixture(candidate, existing) for existing in primary_games):
+                        primary_games.append(candidate)
+                successful_supplements.append(provider_name)
+            except Exception as error:
+                logger.warning(
+                    "Proveedor complementario %s no disponible (%s)",
+                    provider_name,
+                    type(error).__name__,
+                )
 
-        try:
-            supplemental = self.supplemental_api.get_games_by_date(
-                fixture_date=date,
-                force_refresh=force_refresh,
+        if primary_error is not None and not primary_games:
+            raise primary_error
+        primary["response"] = primary_games
+        primary["results"] = len(primary_games)
+        if successful_supplements:
+            primary["_source"] = (
+                successful_supplements[0]
+                if primary_error is not None
+                else "combined"
             )
-            primary_games = [item for item in primary.get("response", []) if isinstance(item, dict)]
-            for candidate in supplemental:
-                if not any(self._same_fixture(candidate, existing) for existing in primary_games):
-                    primary_games.append(candidate)
-            primary["response"] = primary_games
-            primary["results"] = len(primary_games)
-            primary["_source"] = "sportmonks" if primary_error is not None else "combined"
-        except Exception as error:
-            logger.warning(
-                "Proveedor complementario de fútbol no disponible (%s)",
-                type(error).__name__,
-            )
-            if primary_error is not None:
-                raise primary_error
 
         return primary
 
