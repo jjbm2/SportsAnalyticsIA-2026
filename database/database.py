@@ -67,6 +67,7 @@ def create_database():
 
     Base.metadata.create_all(bind=engine)
     _ensure_payment_proof_columns()
+    _ensure_user_moderation_columns()
 
 
 def _ensure_payment_proof_columns() -> None:
@@ -88,3 +89,22 @@ def _ensure_payment_proof_columns() -> None:
                 "UPDATE payment_requests SET proof_path = receipt_path "
                 "WHERE proof_path IS NULL AND receipt_path IS NOT NULL"
             ))
+
+
+def _ensure_user_moderation_columns() -> None:
+    """Add reversible account suspension fields to existing databases."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    datetime_type = "TIMESTAMP" if engine.dialect.name == "postgresql" else "DATETIME"
+    boolean_type = "BOOLEAN" if engine.dialect.name == "postgresql" else "BOOLEAN"
+    with engine.begin() as connection:
+        if "is_banned" not in columns:
+            connection.execute(text(
+                f"ALTER TABLE users ADD COLUMN is_banned {boolean_type} NOT NULL DEFAULT FALSE"
+            ))
+        if "banned_at" not in columns:
+            connection.execute(text(f"ALTER TABLE users ADD COLUMN banned_at {datetime_type}"))
+        if "ban_reason" not in columns:
+            connection.execute(text("ALTER TABLE users ADD COLUMN ban_reason VARCHAR"))

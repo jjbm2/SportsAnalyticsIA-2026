@@ -42,10 +42,38 @@ class AdminService:
                     "email": user.email,
                     "plan": user.plan,
                     "is_admin": user.is_admin,
+                    "is_banned": bool(user.is_banned),
+                    "banned_at": user.banned_at,
+                    "ban_reason": user.ban_reason,
                     "created_at": user.created_at,
                 }
                 for user in session.query(User).order_by(User.created_at.desc()).all()
             ]
+        finally:
+            session.close()
+
+    def set_user_banned(
+        self,
+        admin_user_id: int,
+        user_id: int,
+        banned: bool,
+        reason: str | None = None,
+    ) -> None:
+        session = self.session_factory()
+        try:
+            self._require_admin(session, admin_user_id)
+            user = session.get(User, int(user_id))
+            if user is None:
+                raise ValueError("Usuario no encontrado")
+            if user.id == int(admin_user_id) or user.is_admin:
+                raise ValueError("No se puede suspender una cuenta administrativa")
+            user.is_banned = bool(banned)
+            user.banned_at = utc_now() if banned else None
+            user.ban_reason = (reason or "").strip()[:255] or None if banned else None
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 

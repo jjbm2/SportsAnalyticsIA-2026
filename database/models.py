@@ -158,6 +158,9 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     plan = Column(String, nullable=False, default="free")
     is_admin = Column(Boolean, nullable=False, default=False)
+    is_banned = Column(Boolean, nullable=False, default=False)
+    banned_at = Column(DateTime, nullable=True)
+    ban_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
 

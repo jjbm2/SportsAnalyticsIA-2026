@@ -93,6 +93,46 @@ def render_admin_screen(user: dict, admin: AdminService, billing: BillingManager
             st.success("Plan actualizado")
             st.rerun()
 
+        st.subheader("Control de acceso")
+        moderation_users = {
+            label: item for label, item in user_options.items() if not item.get("is_admin")
+        }
+        if not moderation_users:
+            st.caption("No hay cuentas de usuario disponibles para moderar.")
+        else:
+            moderation_label = st.selectbox(
+                "Cuenta",
+                list(moderation_users),
+                key="admin_moderation_user",
+            )
+            moderation_user = moderation_users[moderation_label]
+            if moderation_user.get("is_banned"):
+                st.warning("Esta cuenta está suspendida y no puede iniciar sesión.")
+                if st.button(
+                    "Reactivar cuenta",
+                    icon=":material/lock_open:",
+                    key="admin_unban_user",
+                ):
+                    admin.set_user_banned(user["id"], moderation_user["id"], False)
+                    st.success("Cuenta reactivada")
+                    st.rerun()
+            else:
+                ban_reason = st.text_input(
+                    "Motivo de suspensión",
+                    max_chars=255,
+                    key="admin_ban_reason",
+                )
+                if st.button(
+                    "Suspender cuenta",
+                    icon=":material/block:",
+                    key="admin_ban_user",
+                ):
+                    admin.set_user_banned(
+                        user["id"], moderation_user["id"], True, ban_reason
+                    )
+                    st.success("Cuenta suspendida")
+                    st.rerun()
+
     with payments_tab:
         st.subheader("Pagos pendientes")
         st.caption("Revisa el comprobante antes de activar cualquier suscripción.")

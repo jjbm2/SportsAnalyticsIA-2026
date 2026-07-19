@@ -40,7 +40,11 @@ class AuthManager:
         session = self.session_factory()
         try:
             user = session.query(User).filter(User.email == normalized).one_or_none()
-            if user is None or not verify_password(password, user.password_hash):
+            if (
+                user is None
+                or bool(user.is_banned)
+                or not verify_password(password, user.password_hash)
+            ):
                 return None
             return self._public_user(user)
         finally:
@@ -50,6 +54,8 @@ class AuthManager:
         session = self.session_factory()
         try:
             user = session.get(User, int(user_id))
+            if user and user.is_banned:
+                return None
             if user and not user.is_admin and user.plan != "free":
                 active = session.query(Subscription).filter(
                     Subscription.user_id == user.id,
@@ -90,5 +96,6 @@ class AuthManager:
             "email": user.email,
             "plan": user.plan,
             "is_admin": bool(user.is_admin),
+            "is_banned": bool(user.is_banned),
             "created_at": user.created_at,
         }

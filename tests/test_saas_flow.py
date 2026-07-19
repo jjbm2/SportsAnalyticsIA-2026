@@ -270,6 +270,26 @@ class SaaSFlowTests(unittest.TestCase):
         self.admin.grant_extra_predictions(self.admin_user["id"], self.user["id"], "Fútbol", 2)
         self.assertEqual(self.usage.can_user_predict(self.user["id"], "Fútbol")["remaining"], 2)
 
+    def test_admin_can_suspend_and_reactivate_user(self) -> None:
+        self.admin.set_user_banned(
+            self.admin_user["id"], self.user["id"], True, "Uso indebido"
+        )
+        self.assertIsNone(self.auth.authenticate("user@example.com", "UserPass123"))
+        self.assertIsNone(self.auth.get_user(self.user["id"]))
+        users = self.admin.list_users(self.admin_user["id"])
+        suspended = next(item for item in users if item["id"] == self.user["id"])
+        self.assertTrue(suspended["is_banned"])
+        self.assertEqual(suspended["ban_reason"], "Uso indebido")
+
+        self.admin.set_user_banned(self.admin_user["id"], self.user["id"], False)
+        self.assertIsNotNone(self.auth.authenticate("user@example.com", "UserPass123"))
+
+    def test_admin_accounts_cannot_be_suspended(self) -> None:
+        with self.assertRaises(ValueError):
+            self.admin.set_user_banned(
+                self.admin_user["id"], self.admin_user["id"], True, "No permitido"
+            )
+
     def test_prediction_history_is_isolated_by_user(self) -> None:
         other = self.auth.register("other@example.com", "OtherPass123")
         with patch("database.prediction_repository.get_session", self.sessions):
